@@ -1,0 +1,112 @@
+->Planet identifiers & metadata
+
+pl_name → Planet name (e.g., K2-18 b).
+hostname → Name of the host star system.
+default_flag → Marks if this is the default parameter set for the planet (1 = yes).
+disposition → Planet’s status: CONFIRMED, CANDIDATE, or FALSE POSITIVE.
+disp_refname → Reference publication for disposition decision.
+pl_refname → Paper/reference for the planet parameters.
+rowupdate → Date when this row was last updated in archive.
+pl_pubdate → Date the planet record was first published.
+releasedate → Date the planet data was released to the public.
+
+
+
+System properties
+
+sy_snum → Number of stars in the system (1 = single, 2 = binary, etc.).
+sy_pnum → Number of planets detected in the system.
+sy_refname → Reference for the system parameters.
+
+
+Discovery info
+
+discoverymethod → Method used (Transit, Radial Velocity, Imaging, etc.).
+disc_year → Year of discovery.
+disc_facility → Telescope/mission used (K2, Kepler, TESS, etc.).
+soltype → Solution type (Published, Default, etc.).
+pl_controv_flag → Flag if discovery is controversial (1 = yes).
+
+
+Orbital parameters
+
+pl_orbper → Orbital period (days).
+pl_orbpererr1, pl_orbpererr2 → Upper/lower error in orbital period.
+pl_orbperlim → Limit flag for orbital period value.
+pl_orbsmax → Semi-major axis of orbit (AU).
+pl_orbsmaxerr1, pl_orbsmaxerr2 → Error in semi-major axis.
+pl_orbsmaxlim → Limit flag for semi-major axis.
+pl_orbeccen → Orbital eccentricity (0 = circle, closer to 1 = more elongated).
+pl_orbeccenerr1, pl_orbeccenerr2 → Error in eccentricity.
+pl_orbeccenlim → Limit flag for eccentricity.
+ttv_flag → Transit Timing Variation present? (1 = yes).
+
+
+Planet physical properties
+
+pl_rade → Planet radius in Earth radii.
+pl_radeerr1, pl_radeerr2 → Errors in radius (Earth units).
+pl_radelim → Limit flag for radius (Earth units).
+pl_radj → Planet radius in Jupiter radii.
+pl_radjerr1, pl_radjerr2 → Errors in radius (Jupiter units).
+pl_radjlim → Limit flag for radius (Jupiter units).
+pl_bmasse → Planet mass in Earth masses.
+pl_bmasseerr1, pl_bmasseerr2 → Errors in mass (Earth units).
+pl_bmasselim → Limit flag for mass (Earth units).
+pl_bmassj → Planet mass in Jupiter masses.
+pl_bmassjerr1, pl_bmassjerr2 → Errors in mass (Jupiter units).
+pl_bmassjlim → Limit flag for mass (Jupiter units).
+pl_bmassprov → Method of mass estimation (e.g., RV, transit timing, astrometry).
+
+
+Planet environment
+
+pl_insol → Insolation flux (stellar radiation received; Earth = 1).
+pl_insolerr1, pl_insolerr2 → Errors in insolation flux.
+pl_insollim → Limit flag for insolation.
+pl_eqt → Equilibrium temperature (K).
+pl_eqterr1, pl_eqterr2 → Errors in equilibrium temperature.
+pl_eqtlim → Limit flag for equilibrium temperature.
+
+
+
+Stellar properties (host star)
+
+st_refname → Reference for stellar parameters.
+st_spectype → Spectral type of star (e.g., G2V = Sun-like).
+st_teff → Effective temperature (Kelvin).
+st_tefferr1, st_tefferr2 → Errors in temperature.
+st_tefflim → Limit flag for temperature.
+st_rad → Stellar radius (in solar radii).
+st_raderr1, st_raderr2 → Errors in radius.
+st_radlim → Limit flag for radius.
+st_mass → Stellar mass (in solar masses).
+st_masserr1, st_masserr2 → Errors in mass.
+st_masslim → Limit flag for mass.
+st_met → Stellar metallicity [Fe/H].
+st_meterr1, st_meterr2 → Errors in metallicity.
+st_metlim → Limit flag for metallicity.
+st_metratio → Metallicity ratio relative to solar.
+st_logg → Stellar surface gravity (log g in cgs).
+st_loggerr1, st_loggerr2 → Errors in log g.
+st_logglim → Limit flag for log g.
+
+
+Position & distance
+
+rastr → Right ascension (string format).
+ra → Right ascension (numeric, degrees).
+decstr → Declination (string format).
+dec → Declination (numeric, degrees).
+sy_dist → Distance from Earth (parsecs).
+sy_disterr1, sy_disterr2 → Errors in distance.
+
+
+Brightness (magnitudes)
+
+sy_vmag → Visual magnitude (brightness in V band).
+sy_vmagerr1, sy_vmagerr2 → Errors in V mag.
+sy_kmag → Infrared magnitude (K band).
+sy_kmagerr1, sy_kmagerr2 → Errors in K mag.
+sy_gaiamag → Gaia G-band magnitude.
+sy_gaiamagerr1, sy_gaiamagerr2 → Errors in Gaia magnitude.
