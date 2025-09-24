@@ -1,12 +1,13 @@
 import logging
 import joblib
+import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.pipeline import Pipeline
 from dataloader import load_data
 from preprocess import preprocess_features, create_pipeline
 from model import get_model
-
+import os
 # Set up logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -17,7 +18,7 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 
-def process_k2(data_path, model_type):
+def process_k2(data_path, model_type, satellite):
     """Process K2 dataset, train and evaluate the model."""
     logger.info("Processing K2 dataset...")
     
@@ -81,16 +82,22 @@ def process_k2(data_path, model_type):
 
     cm = confusion_matrix(y_val, preds)
     logger.info("\n=== CONFUSION MATRIX ===")
-    logger.info(f"\n{cm}")
+    logger.info(f"\n{pd.DataFrame(cm, index=CLASS_ORDER, columns=CLASS_ORDER)}")
+
+    model_dir = '../savedmodel'
+    if not os.path.exists(model_dir):
+        logger.info(f"Creating directory {model_dir}")
+        os.makedirs(model_dir)
 
     # Save the model
-    joblib.dump(pipe, f"K2_model_{model_type}.pkl")
-    logger.info(f"K2 model saved as K2_model_{model_type}.pkl")
+    model_path = os.path.join(model_dir, f"{satellite}_model_{model_type}.joblib")
+    joblib.dump(pipe, model_path)
+    logger.info(f"K2 model saved as K2_model_{model_type}.joblib")
 
 def main(data_path, satellite="K2", model_type="rf"):
     """Main function to load data, preprocess, train model, and evaluate."""
     if satellite == "K2":
-        process_k2(data_path, model_type)
+        process_k2(data_path, model_type, satellite)
     else:
         logger.error(f"Unknown satellite: {satellite}")
 
