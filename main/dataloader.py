@@ -22,6 +22,17 @@ def load_data(file_path, satellite):
         except Exception as e:
             logger.error(f"Error loading dataset: {e}")
             return None
+    elif satellite == "KOI":
+        try:
+            df = pd.read_csv(file_path, comment="#")
+            logger.info("Dataset loaded successfully!")
+            logger.info(f"Dataset shape: {df.shape}")
+            logger.info(df['koi_disposition'].value_counts())
+            logger.info(f"Columns: {df.columns.tolist()}")
+            return df
+        except Exception as e:
+            logger.error(f"Error loading dataset: {e}")
+            return None
     else:
         logger.warning(f"Data for {satellite} is not available, skipping...")
         return None
