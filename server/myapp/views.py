@@ -343,3 +343,24 @@ def prediction_view(request):
 
     except Exception as e:
         return JsonResponse({"ok": False, "error": str(e)})
+
+
+
+@require_http_methods(["GET"])
+def list_uploads(request):
+    """
+    Returns all CSV files under media/uploads with their direct media URLs.
+    """
+    files = []
+    for p in UPLOAD_DIR.glob("*.csv"):
+        files.append({
+            "filename": p.name,
+            "size_bytes": p.stat().st_size,
+            "url": request.build_absolute_uri(f"{settings.MEDIA_URL}uploads/{p.name}")
+        })
+
+    return JsonResponse({
+        "ok": True,
+        "count": len(files),
+        "files": files
+    })
