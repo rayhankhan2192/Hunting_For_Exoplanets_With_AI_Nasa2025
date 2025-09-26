@@ -93,13 +93,16 @@ def process_k2(data_path, model_type, satellite):
     model_path = os.path.join(model_dir, f"{satellite}_model_{model_type}.joblib")
     joblib.dump(pipe, model_path)
     logger.info(f"K2 model saved as K2_model_{model_type}.joblib")
+    return str(model_path)
 
 def main(data_path, satellite="K2", model_type="rf"):
     """Main function to load data, preprocess, train model, and evaluate."""
     if satellite == "K2":
-        process_k2(data_path, model_type, satellite)
+        #process_k2(data_path, model_type, satellite)
+        return process_k2(data_path, model_type, satellite)  # <-- return
     else:
         logger.error(f"Unknown satellite: {satellite}")
+        return None
 
 if __name__ == "__main__":
     import argparse
