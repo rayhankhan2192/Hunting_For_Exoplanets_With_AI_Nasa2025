@@ -174,14 +174,20 @@ import pandas as pd
 BASE_DIR = Path(__file__).resolve().parents[2]
 LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+def _to_int_or_none(val):
+    s = (str(val).strip() if val is not None else "")
+    return int(s) if s.isdigit() or (s.startswith('-') and s[1:].isdigit()) else None
+
+from django.http import JsonResponse, HttpResponseNotAllowed
 @csrf_exempt
 def prediction_view(request):
     if request.method != "POST":
-        return JsonResponse({"ok": False, "error": "Only POST allowed"})
+        return HttpResponseNotAllowed(permitted_methods=["POST"])
 
     try:
-        # === Required params ===
-        satellite = request.POST.get("satellite", "").upper().strip()
+        # Required: satellite + file
+        satellite = (request.POST.get("satellite") or "").upper().strip()
         if not satellite:
             return JsonResponse({"ok": False, "error": "Missing satellite parameter"})
 
@@ -189,28 +195,51 @@ def prediction_view(request):
         if not file_obj:
             return JsonResponse({"ok": False, "error": "Missing CSV file"})
 
-        # Save uploaded file temporarily
+        # Save uploaded file
         tmp_path = LOG_DIR / file_obj.name
         with open(tmp_path, "wb+") as f:
             for chunk in file_obj.chunks():
                 f.write(chunk)
 
-        # === Optional row range ===
-        try:
-            from_row = int(request.POST.get("from_csv_range", 0))
-            to_row = request.POST.get("to_csv_range")
-            to_row = int(to_row) if to_row is not None else -1
-        except ValueError:
-            return JsonResponse({"ok": False, "error": "Invalid row range"})
+        # Accept both correct key and the earlier typo just in case
+        from_raw = request.POST.get("from_csv_range")
+        if from_raw is None:
+            from_raw = request.POST.get("from_csv_rabge")  # typo fallback
 
-        # If no to_row → full CSV
-        if to_row == -1:
-            df = pd.read_csv(tmp_path, comment="#")
-            to_row = len(df) - 1
+        to_raw = request.POST.get("to_csv_range")
 
-        row_numbers = list(range(from_row, to_row + 1))
+        from_row = _to_int_or_none(from_raw)
+        to_row   = _to_int_or_none(to_raw)
 
-        # === Dispatch prediction ===
+        # Load CSV once if we need its length
+        df_len = None
+        if from_row is None and to_row is None:
+            # No range provided -> predict full CSV
+            row_numbers = None
+        else:
+            # If from missing -> start at 0
+            if from_row is None:
+                from_row = 0
+            # If to missing -> go to end
+            if to_row is None:
+                if df_len is None:
+                    df_len = pd.read_csv(tmp_path, comment="#").shape[0]
+                to_row = df_len - 1
+
+            # Validate/clamp
+            if df_len is None:
+                df_len = pd.read_csv(tmp_path, comment="#").shape[0]
+
+            # Clamp to valid bounds
+            from_row = max(0, from_row)
+            to_row   = min(df_len - 1, to_row)
+
+            if from_row > to_row:
+                return JsonResponse({"ok": False, "error": "Invalid row range: from_row > to_row"})
+
+            row_numbers = list(range(from_row, to_row + 1))
+
+        # Dispatch prediction
         if satellite == "KOI":
             results_df = koiprediction.predict_from_csv(str(tmp_path), row_numbers)
         else:
@@ -219,16 +248,16 @@ def prediction_view(request):
         if results_df is None or results_df.empty:
             return JsonResponse({"ok": False, "error": "Prediction failed"})
 
-        # === Save predicted CSV ===
+        # Save predicted CSV
         output_file = LOG_DIR / f"predicted_{satellite}.csv"
         results_df.to_csv(output_file, index=False)
 
-        # === Build response ===
+        # Respond
         return JsonResponse({
             "ok": True,
             "satellite": satellite,
-            "from_row": from_row,
-            "to_row": to_row,
+            "from_row": from_row if row_numbers is not None else 0,
+            "to_row": to_row if row_numbers is not None else (df_len if df_len is not None else pd.read_csv(tmp_path, comment="#").shape[0]) - 1,
             "total_predicted": len(results_df),
             "csv_file": str(output_file),
             "results": results_df.to_dict(orient="records"),
