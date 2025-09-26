@@ -23,6 +23,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 # Support both "python -m main.train" and direct script execution
 try:
@@ -103,11 +104,11 @@ def process_k2(data_path, model_type, satellite):
     pipe = Pipeline([("preprocessor", preprocessor), ("clf", model)])
 
     # Train the model
-    logger.info(f"Training {model_type} model for K2")
+    logger.info(f"Training {model_type} model for {satellite}")
     pipe.fit(X_train, y_train)
 
     # Evaluate the model
-    logger.info("Evaluating K2 model")
+    logger.info(f"Evaluating {satellite} model")
     preds = pipe.predict(X_val)
     logger.info("\n=== VALIDATION REPORT ===")
     logger.info(classification_report(y_val, preds, target_names=CLASS_ORDER, digits=4))
@@ -133,11 +134,74 @@ def process_k2(data_path, model_type, satellite):
     logger.info(f"{satellite} model saved as {model_path}")
     return str(model_path)
 
+def process_koi(data_path, model_type, satellite):
+    """Process KOI dataset, train and evaluate the model."""
+    logger.info("Processing KOI dataset...")
+
+    df = load_data(data_path, "KOI")
+    if df is None:
+        logger.error("Dataset for KOI not found.")
+        return
+    logger.info(f"Dataset shape: {df.shape}")
+    logger.info(f"Columns: {len(df.columns)}")
+
+    x, y = preprocess_features(df, "KOI")
+    if x.empty: # No preprocessing steps applied
+        logger.warning("No preprocessing steps applied for KOI. Skipping training.")
+        return
+    if y is None:
+        logger.error("Target variable 'disposition' is missing!")
+        return
+    X_train, X_test, y_train, y_test = train_test_split(
+        x, y, test_size=0.2, random_state=42, stratify=y
+    )
+    
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+
+    logger.info(f"   Data split completed:")
+    logger.info(f"   Training set: {X_train.shape[0]} samples")
+    logger.info(f"   Test set: {X_test.shape[0]} samples")
+
+    model = get_model(model_type=model_type)
+    
+
+    # Train the model
+    logger.info(f"Training {model_type} model for {satellite}")
+    model.fit(X_train, y_train)
+
+    CLASS_ORDER = ["FALSE POSITIVE", "CANDIDATE", "CONFIRMED"]
+    CLASS_TO_ID = {c: i for i, c in enumerate(CLASS_ORDER)}
+
+    # Evaluate the model
+    logger.info(f"Evaluating {satellite} model")
+    preds = model.predict(X_test)
+    logger.info("\n=== VALIDATION REPORT ===")
+    logger.info(f"\n{classification_report(y_test, preds, target_names=CLASS_ORDER, digits=4)}")
+
+    cm = confusion_matrix(y_test, preds)
+    logger.info("\n=== CONFUSION MATRIX ===")
+
+    model_dir = '../savedmodel'
+    if not os.path.exists(model_dir):
+        logger.info(f"Creating directory {model_dir}")
+        os.makedirs(model_dir)
+
+
+    os.makedirs(SAVEDMODEL_DIR, exist_ok=True)
+    model_path = os.path.join(SAVEDMODEL_DIR, f"{satellite}_model_{model_type}.joblib")
+    joblib.dump(model, model_path)
+    logger.info(f"{satellite} model saved as {model_path}")
+    return str(model_path)
+
 def main(data_path, satellite="K2", model_type="rf"):
     """Main function to load data, preprocess, train model, and evaluate."""
     if satellite == "K2":
         #process_k2(data_path, model_type, satellite)
-        return process_k2(data_path, model_type, satellite)  # <-- return
+        return process_k2(data_path, model_type, satellite)
+    elif satellite == "KOI":
+        return process_koi(data_path, model_type, satellite)
     else:
         logger.error(f"Unknown satellite: {satellite}")
         return None
