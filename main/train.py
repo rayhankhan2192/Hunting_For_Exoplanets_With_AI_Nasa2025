@@ -1,14 +1,45 @@
-import logging
-import joblib
+# import logging
+# import joblib
+# import pandas as pd
+# from sklearn.model_selection import train_test_split
+# from sklearn.metrics import classification_report, confusion_matrix
+# from sklearn.pipeline import Pipeline
+# from dataloader import load_data
+# from preprocess import preprocess_features, create_pipeline
+# from model import get_model
+# import os
+# # Set up logging
+# logger = logging.getLogger(__name__)
+# logger.setLevel(logging.INFO)
+# ch = logging.StreamHandler()
+# ch.setLevel(logging.INFO)
+# formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+# ch.setFormatter(formatter)
+# logger.addHandler(ch)
+
+# --- top of file: replace your import block with this ---
+import logging, os, joblib
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.pipeline import Pipeline
-from dataloader import load_data
-from preprocess import preprocess_features, create_pipeline
-from model import get_model
-import os
-# Set up logging
+
+# Support both "python -m main.train" and direct script execution
+try:
+    from .dataloader import load_data
+    from .preprocess import preprocess_features, create_pipeline
+    from .model import get_model
+except ImportError:
+    from dataloader import load_data
+    from preprocess import preprocess_features, create_pipeline
+    from model import get_model
+
+# --- add a robust base dir + model dir ---
+# BASE_DIR = repo root if run via package; otherwise fall back to current file's parent
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+SAVEDMODEL_DIR = os.getenv("SAVEDMODEL_DIR", os.path.join(BASE_DIR, "savedmodel"))
+
+# logging stays the same
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 ch = logging.StreamHandler()
@@ -16,6 +47,7 @@ ch.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 logger.addHandler(ch)
+
 
 
 def process_k2(data_path, model_type, satellite):
@@ -89,10 +121,16 @@ def process_k2(data_path, model_type, satellite):
         logger.info(f"Creating directory {model_dir}")
         os.makedirs(model_dir)
 
-    # Save the model
-    model_path = os.path.join(model_dir, f"{satellite}_model_{model_type}.joblib")
+    # # Save the model
+    # model_path = os.path.join(model_dir, f"{satellite}_model_{model_type}.joblib")
+    # joblib.dump(pipe, model_path)
+    # logger.info(f"K2 model saved as K2_model_{model_type}.joblib")
+    # return str(model_path)
+
+    os.makedirs(SAVEDMODEL_DIR, exist_ok=True)
+    model_path = os.path.join(SAVEDMODEL_DIR, f"{satellite}_model_{model_type}.joblib")
     joblib.dump(pipe, model_path)
-    logger.info(f"K2 model saved as K2_model_{model_type}.joblib")
+    logger.info(f"{satellite} model saved as {model_path}")
     return str(model_path)
 
 def main(data_path, satellite="K2", model_type="rf"):
@@ -109,7 +147,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train exoplanet model")
     parser.add_argument("--data-path", type=str, required=True, help="Path to the dataset CSV file")
     parser.add_argument("--satellite", type=str, default="K2", help="Satellite name (K2, TOI, KOI)")
-    parser.add_argument("--model", type=str, choices=["rf", "xgb", "dt"], default="rf", help="Model type (rf, xgb, dt)")
+    parser.add_argument("--model", type=str, choices=["rf", "xgb", "dt", "grdb", "logreg", "svm"], default="rf", help="Model type (rf, xgb, dt)")
 
     args = parser.parse_args()
 
