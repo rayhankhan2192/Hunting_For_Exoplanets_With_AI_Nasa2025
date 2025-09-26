@@ -88,7 +88,7 @@ def preprocess_features(df, satellite):
 
         return X, target
     
-    
+
     elif satellite == "KOI":
         df_processed = df.copy()
 
@@ -199,7 +199,7 @@ def preprocess_features(df, satellite):
 
         logger.info(f"Final feature matrix shape: {X.shape}")
         logger.info(f"Target distribution: {np.bincount(y)}")
-        return X, y
+        return X, y, target_encoder
     
     else:
         return pd.DataFrame(), pd.Series()  # Placeholder for other datasets

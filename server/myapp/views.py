@@ -8,6 +8,7 @@ from pathlib import Path
 from django.utils.text import slugify
 
 from .jobs import create_training_job, get_job, get_job_logs
+from . import koiprediction
 
 TERMINAL = {"SUCCEEDED", "FAILED"}
 
@@ -166,3 +167,72 @@ def training_logs(request, job_id: str):
         tail = None
     logs = get_job_logs(job_id, tail=tail)
     return JsonResponse({"ok": True, "job_id": job_id, "tail": tail, "logs": logs})
+
+
+import pandas as pd
+# Base directories
+BASE_DIR = Path(__file__).resolve().parents[2]
+LOG_DIR = BASE_DIR / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+@csrf_exempt
+def prediction_view(request):
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Only POST allowed"})
+
+    try:
+        # === Required params ===
+        satellite = request.POST.get("satellite", "").upper().strip()
+        if not satellite:
+            return JsonResponse({"ok": False, "error": "Missing satellite parameter"})
+
+        file_obj = request.FILES.get("file")
+        if not file_obj:
+            return JsonResponse({"ok": False, "error": "Missing CSV file"})
+
+        # Save uploaded file temporarily
+        tmp_path = LOG_DIR / file_obj.name
+        with open(tmp_path, "wb+") as f:
+            for chunk in file_obj.chunks():
+                f.write(chunk)
+
+        # === Optional row range ===
+        try:
+            from_row = int(request.POST.get("from_csv_range", 0))
+            to_row = request.POST.get("to_csv_range")
+            to_row = int(to_row) if to_row is not None else -1
+        except ValueError:
+            return JsonResponse({"ok": False, "error": "Invalid row range"})
+
+        # If no to_row → full CSV
+        if to_row == -1:
+            df = pd.read_csv(tmp_path, comment="#")
+            to_row = len(df) - 1
+
+        row_numbers = list(range(from_row, to_row + 1))
+
+        # === Dispatch prediction ===
+        if satellite == "KOI":
+            results_df = koiprediction.predict_from_csv(str(tmp_path), row_numbers)
+        else:
+            return JsonResponse({"ok": False, "error": f"Satellite {satellite} not supported yet"})
+
+        if results_df is None or results_df.empty:
+            return JsonResponse({"ok": False, "error": "Prediction failed"})
+
+        # === Save predicted CSV ===
+        output_file = LOG_DIR / f"predicted_{satellite}.csv"
+        results_df.to_csv(output_file, index=False)
+
+        # === Build response ===
+        return JsonResponse({
+            "ok": True,
+            "satellite": satellite,
+            "from_row": from_row,
+            "to_row": to_row,
+            "total_predicted": len(results_df),
+            "csv_file": str(output_file),
+            "results": results_df.to_dict(orient="records"),
+        })
+
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)})

@@ -1,23 +1,3 @@
-# import logging
-# import joblib
-# import pandas as pd
-# from sklearn.model_selection import train_test_split
-# from sklearn.metrics import classification_report, confusion_matrix
-# from sklearn.pipeline import Pipeline
-# from dataloader import load_data
-# from preprocess import preprocess_features, create_pipeline
-# from model import get_model
-# import os
-# # Set up logging
-# logger = logging.getLogger(__name__)
-# logger.setLevel(logging.INFO)
-# ch = logging.StreamHandler()
-# ch.setLevel(logging.INFO)
-# formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-# ch.setFormatter(formatter)
-# logger.addHandler(ch)
-
-# --- top of file: replace your import block with this ---
 import logging, os, joblib
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -35,7 +15,6 @@ except ImportError:
     from preprocess import preprocess_features, create_pipeline
     from model import get_model
 
-# --- add a robust base dir + model dir ---
 # BASE_DIR = repo root if run via package; otherwise fall back to current file's parent
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SAVEDMODEL_DIR = os.getenv("SAVEDMODEL_DIR", os.path.join(BASE_DIR, "savedmodel"))
@@ -145,7 +124,7 @@ def process_koi(data_path, model_type, satellite):
     logger.info(f"Dataset shape: {df.shape}")
     logger.info(f"Columns: {len(df.columns)}")
 
-    x, y = preprocess_features(df, "KOI")
+    x, y, target_encoder = preprocess_features(df, "KOI")
     if x.empty: # No preprocessing steps applied
         logger.warning("No preprocessing steps applied for KOI. Skipping training.")
         return
@@ -171,14 +150,11 @@ def process_koi(data_path, model_type, satellite):
     logger.info(f"Training {model_type} model for {satellite}")
     model.fit(X_train, y_train)
 
-    CLASS_ORDER = ["FALSE POSITIVE", "CANDIDATE", "CONFIRMED"]
-    CLASS_TO_ID = {c: i for i, c in enumerate(CLASS_ORDER)}
-
     # Evaluate the model
     logger.info(f"Evaluating {satellite} model")
     preds = model.predict(X_test)
     logger.info("\n=== VALIDATION REPORT ===")
-    logger.info(f"\n{classification_report(y_test, preds, target_names=CLASS_ORDER, digits=4)}")
+    logger.info(f"\n{classification_report(y_test, preds, target_names=target_encoder.classes_, digits=4)}")
 
     cm = confusion_matrix(y_test, preds)
     logger.info("\n=== CONFUSION MATRIX ===")
@@ -191,7 +167,12 @@ def process_koi(data_path, model_type, satellite):
 
     os.makedirs(SAVEDMODEL_DIR, exist_ok=True)
     model_path = os.path.join(SAVEDMODEL_DIR, f"{satellite}_model_{model_type}.joblib")
+    target_encoder_path = os.path.join(SAVEDMODEL_DIR, f"{satellite}_target_encoder_{model_type}.joblib")
+    feature_scaler_path = os.path.join(SAVEDMODEL_DIR, f"{satellite}_feature_scaler_{model_type}.joblib")
+    
     joblib.dump(model, model_path)
+    joblib.dump(target_encoder, target_encoder_path)
+    joblib.dump(scaler, feature_scaler_path)
     logger.info(f"{satellite} model saved as {model_path}")
     return str(model_path)
 
