@@ -4,3 +4,4 @@ __pycache__
 savedmodel/
 dataset/
 logs/
+media/

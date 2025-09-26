@@ -5,6 +5,7 @@ from django.views.decorators.http import require_http_methods
 from pathlib import Path
 from django.utils.text import slugify
 import pandas as pd
+from django.conf import settings
 
 from .jobs import create_training_job, get_job, get_job_logs
 from . import koiprediction
@@ -13,7 +14,9 @@ TERMINAL = {"SUCCEEDED", "FAILED"}
 
 # === NEW: single source of truth for repo root + upload dir (shared by training & prediction) ===
 REPO_ROOT = Path(__file__).resolve().parents[2]
-UPLOAD_DIR = REPO_ROOT / "DataSet" / "uploads"
+# UPLOAD_DIR = REPO_ROOT / "DataSet" / "uploads"
+# UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+UPLOAD_DIR = settings.MEDIA_ROOT / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # Logs dir only for textual logs
@@ -325,6 +328,7 @@ def prediction_view(request):
         pred_name = f"{Path(safe_name).stem}__pred_{satellite}_{ts}.csv"
         output_file = (UPLOAD_DIR / pred_name)
         df_raw.to_csv(output_file, index=False)
+        csv_url = f"{settings.MEDIA_URL}uploads/{pred_name}"
 
         # Respond (JSON FORMAT UNCHANGED)
         return JsonResponse({
@@ -333,7 +337,7 @@ def prediction_view(request):
             "from_row": from_resp if row_numbers is not None else 0,
             "to_row": to_resp if row_numbers is not None else (df_len if df_len is not None else pd.read_csv(tmp_path, comment="#").shape[0]) - 1,
             "total_predicted": len(results_df),
-            "csv_file": str(output_file).replace("\\", "/"),
+            "csv_file": request.build_absolute_uri(csv_url), 
             "results": results_df.to_dict(orient="records"),
         })
 
