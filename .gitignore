@@ -2,3 +2,4 @@ Dataset/
 venv/
 __pycache__
 savedmodel/
+dataset/
