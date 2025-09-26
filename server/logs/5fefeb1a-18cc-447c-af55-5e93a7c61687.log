@@ -1,0 +1,3 @@
+[JOB 5fefeb1a-18cc-447c-af55-5e93a7c61687] Starting training...
+Params: data_path=E:/Nasa Space App 2025/Hunting_For_Exoplanets_With_AI_Nasa2025/datasets/uploads/k2_data.csv, satellite=K2, model_type=rf
+Working dir: E:\Nasa Space App 2025\Hunting_For_Exoplanets_With_AI_Nasa2025\server
