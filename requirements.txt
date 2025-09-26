@@ -13,10 +13,19 @@ imbalanced-learn
 joblib
 
 
-tensorflow
-torch
-torchvision
+# tensorflow
+# torch
+# torchvision
 
 
 jupyterlab
 notebook
+
+
+django
+djangorestframework
+django-cors-headers
+requests
+pillow
+python-decouple
+python-dotenv

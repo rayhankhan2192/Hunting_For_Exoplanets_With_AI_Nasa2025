@@ -1,0 +1,19 @@
+{
+  "best_model": "xgboost",
+  "best_params": {
+    "colsample_bytree": 0.8,
+    "learning_rate": 0.1,
+    "max_depth": 3,
+    "n_estimators": 300,
+    "subsample": 1.0
+  },
+  "test_accuracy": 0.9270998415213946,
+  "auc_score": 0.9854250794466646,
+  "cv_score": 0.932109170381565,
+  "feature_count": 47,
+  "target_classes": [
+    "CANDIDATE",
+    "CONFIRMED",
+    "FALSE POSITIVE"
+  ]
+}
