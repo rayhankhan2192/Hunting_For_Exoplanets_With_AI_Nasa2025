@@ -158,6 +158,7 @@ def process_koi(data_path, model_type, satellite):
 
     cm = confusion_matrix(y_test, preds)
     logger.info("\n=== CONFUSION MATRIX ===")
+    logger.info(f"\n{pd.DataFrame(cm, index=target_encoder.classes_, columns=target_encoder.classes_)}")
 
     model_dir = '../savedmodel'
     if not os.path.exists(model_dir):
