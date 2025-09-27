@@ -10,4 +10,5 @@ urlpatterns = [
     # Prediction endpoint
     path("api/predict", views.prediction_view, name="prediction_view"),
     path("api/uploads", views.list_uploads, name="list_uploads"),  
+    path("api/merge-train", views.merge_and_train, name="merge_and_train"),
 ]

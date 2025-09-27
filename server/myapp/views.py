@@ -364,3 +364,77 @@ def list_uploads(request):
         "count": len(files),
         "files": files
     })
+
+from .mergecsv import merge_csvs
+@csrf_exempt
+@require_http_methods(["POST"])
+def merge_and_train(request):
+    """
+    JSON:
+    {
+      "file_a": "train.csv",
+      "file_b": "test.csv",
+      "satellite": "KOI",         # default "K2"
+      "model": "rf",              # default "rf"
+      "dedupe": true,             # optional
+      "output_name": "merged.csv" # optional
+    }
+    """
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        return HttpResponseBadRequest("Invalid JSON body")
+
+    file_a = (payload.get("file_a") or "").strip()
+    file_b = (payload.get("file_b") or "").strip()
+    if not file_a or not file_b:
+        return JsonResponse({"ok": False, "error": "file_a and file_b are required"}, status=400)
+
+    satellite = (payload.get("satellite") or "K2").upper().strip()
+    model_type = (payload.get("model") or "rf").strip()
+    dedupe = bool(payload.get("dedupe", True))
+    output_name = (payload.get("output_name") or "").strip() or None
+
+    # Merge via helper
+    try:
+        out_path, total_rows = merge_csvs(file_a, file_b, dedupe=dedupe, output_name=output_name)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=400)
+
+    # Start training (blocking) on the merged file
+    data_path = str(out_path).replace("\\", "/")
+    try:
+        job_info = create_training_job(data_path=data_path, satellite=satellite, model_type=model_type)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Failed to start job: {e}"}, status=400)
+
+    job_id = job_info["job_id"]
+
+    TERMINAL = {"SUCCEEDED", "FAILED"}
+    while True:
+        state = get_job(job_id)
+        if state and state.get("status") in TERMINAL:
+            merged_url = request.build_absolute_uri(f"{settings.MEDIA_URL}uploads/{out_path.name}")
+            if state["status"] == "SUCCEEDED":
+                return JsonResponse({
+                    "ok": True,
+                    "message": "Merged and training successful",
+                    "merged_file": out_path.name,
+                    "merged_url": merged_url,
+                    "rows": total_rows,
+                    "job_id": job_id,
+                    "status": state["status"],
+                    "result": state.get("result"),
+                }, status=200)
+            else:
+                return JsonResponse({
+                    "ok": False,
+                    "message": "Merged but training failed",
+                    "merged_file": out_path.name,
+                    "merged_url": merged_url,
+                    "rows": total_rows,
+                    "job_id": job_id,
+                    "status": state["status"],
+                    "error": state.get("error"),
+                }, status=500)
+        time.sleep(3)
