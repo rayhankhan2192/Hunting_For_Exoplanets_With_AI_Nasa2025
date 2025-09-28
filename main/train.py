@@ -192,85 +192,6 @@ def process_k2(data_path, model_type, satellite):
     }
 
 
-# def process_koi(data_path, model_type, satellite):
-#     """Process KOI dataset, train and evaluate the model."""
-#     logger.info("Processing KOI dataset...")
-
-#     df = load_data(data_path, "KOI")
-#     if df is None:
-#         logger.error("Dataset for KOI not found.")
-#         return
-#     logger.info(f"Dataset shape: {df.shape}")
-#     logger.info(f"Columns: {len(df.columns)}")
-
-#     x, y, target_encoder = preprocess_features(df, "KOI")
-#     if x.empty: # No preprocessing steps applied
-#         logger.warning("No preprocessing steps applied for KOI. Skipping training.")
-#         return
-#     if y is None:
-#         logger.error("Target variable 'disposition' is missing!")
-#         return
-#     X_train, X_test, y_train, y_test = train_test_split(
-#         x, y, test_size=0.2, random_state=42, stratify=y
-#     )
-    
-#     scaler = StandardScaler()
-#     X_train_scaled = scaler.fit_transform(X_train)
-#     X_test_scaled = scaler.transform(X_test)
-
-#     logger.info(f"   Data split completed:")
-#     logger.info(f"   Training set: {X_train.shape[0]} samples")
-#     logger.info(f"   Test set: {X_test.shape[0]} samples")
-
-#     model = get_model(model_type=model_type)
-    
-
-#     # Train the model
-#     logger.info(f"Training {model_type} model for {satellite}")
-#     model.fit(X_train, y_train)
-#     y_pred = model.predict(X_test)
-#     y_pred_proba = model.predict_proba(X_test)
-#     cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='accuracy')
-
-#     accuracy = np.mean(y_pred == y_test)
-#     cv_mean = cv_scores.mean()
-#     cv_std = cv_scores.std()
-
-#     if len(np.unique(y)) > 2:
-#         auc_score = roc_auc_score(y_test, y_pred_proba, multi_class='ovr', average='macro')
-#     else:
-#         auc_score = roc_auc_score(y_test, y_pred_proba[:, 1])
-    
-#     logger.info(f"Test Accuracy: {accuracy:.4f}")
-#     logger.info(f"Cross-validation Accuracy: {cv_mean:.4f} ± {cv_std:.4f}")
-#     logger.info(f"ROC-AUC Score: {auc_score:.4f}")
-
-#     # Evaluate the model
-#     logger.info(f"Evaluating {satellite} model")
-#     preds = model.predict(X_test)
-#     logger.info("\n=== VALIDATION REPORT ===")
-#     logger.info(f"\n{classification_report(y_test, preds, target_names=target_encoder.classes_, digits=4)}")
-
-#     cm = confusion_matrix(y_test, preds)
-#     logger.info("\n=== CONFUSION MATRIX ===")
-#     logger.info(f"\n{pd.DataFrame(cm, index=target_encoder.classes_, columns=target_encoder.classes_)}")
-
-#     model_dir = '../savedmodel'
-#     if not os.path.exists(model_dir):
-#         logger.info(f"Creating directory {model_dir}")
-#         os.makedirs(model_dir)
-
-
-#     os.makedirs(SAVEDMODEL_DIR, exist_ok=True)
-#     model_path = os.path.join(SAVEDMODEL_DIR, f"{satellite}_model_{model_type}.joblib")
-#     target_encoder_path = os.path.join(SAVEDMODEL_DIR, f"{satellite}_target_encoder_{model_type}.joblib")
-#     feature_scaler_path = os.path.join(SAVEDMODEL_DIR, f"{satellite}_feature_scaler_{model_type}.joblib")
-    
-#     joblib.dump(model, model_path)
-#     joblib.dump(target_encoder, target_encoder_path)
-#     joblib.dump(scaler, feature_scaler_path)
-#     logger.info(f"{satellite} model saved as {model_path}")
-#     return str(model_path)
 def process_koi(data_path, model_type, satellite):
     """
     Train/eval on KOI and return:
@@ -373,12 +294,26 @@ def process_koi(data_path, model_type, satellite):
         labels = None
 
     cm = confusion_matrix(y_test, y_pred)
-    logger.info("\n=== CONFUSION MATRIX ===")
+    logger.info("\n=== CONFUSION MATRIX (raw counts) ===")
     try:
         cm_df = pd.DataFrame(cm, index=labels, columns=labels)
         logger.info(f"\n{cm_df}")
     except Exception:
         logger.info(f"\n{pd.DataFrame(cm)}")
+
+    # === Normalized CM (row-wise) ===
+    with np.errstate(all="ignore"):
+        cm_normalized = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
+    cm_normalized = np.nan_to_num(cm_normalized)  # replace NaN for rows with 0 samples
+
+    logger.info("\n=== CONFUSION MATRIX (normalized) ===")
+    try:
+        cm_norm_df = pd.DataFrame(
+            cm_normalized.round(3), index=labels, columns=labels
+        )
+        logger.info(f"\n{cm_norm_df}")
+    except Exception:
+        logger.info(f"\n{pd.DataFrame(cm_normalized)}")
 
     # Save artifacts to MEDIA_ROOT
     model_path = MODELS_DIR / f"{satellite}_model_{model_type}.joblib"
@@ -393,10 +328,12 @@ def process_koi(data_path, model_type, satellite):
 
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     cm_img_path = PLOTS_DIR / f"cm_{satellite}_{model_type}_{timestamp}.png"
+    cm_norm_img_path = PLOTS_DIR / f"cm_{satellite}_{model_type}_{timestamp}_normalized.png"
 
+    # --- Raw CM Plot ---
     plt.figure(figsize=(6, 5), dpi=160)
     plt.imshow(cm, interpolation="nearest")
-    plt.title(f"Confusion Matrix – {satellite} / {model_type}")
+    plt.title(f"Confusion Matrix – {satellite}/{model_type}")
     plt.colorbar()
     ticks = np.arange(cm.shape[0])
     tick_labels = labels if labels is not None else [str(i) for i in ticks]
@@ -404,25 +341,69 @@ def process_koi(data_path, model_type, satellite):
     plt.yticks(ticks, tick_labels)
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
-            plt.text(j, i, format(cm[i, j], "d"), ha="center", va="center", fontsize=10)
+            plt.text(j, i, format(cm[i, j], "d"),
+                    ha="center", va="center", fontsize=10)
     plt.ylabel("True label")
     plt.xlabel("Predicted label")
     plt.tight_layout()
     plt.savefig(cm_img_path, bbox_inches="tight")
     plt.close()
 
-    logger.info(f"Saved confusion matrix image at: {cm_img_path}")
+    # --- Normalized CM Plot ---
+    plt.figure(figsize=(6.5, 6.2), dpi=180)
+    ax = plt.gca()
+    im = ax.imshow(cm_normalized, vmin=0.0, vmax=1.0, interpolation="nearest")
+
+    # title & axes
+    ax.set_title(f"Normalized Confusion Matrix – {satellite}/{model_type}", pad=12)
+    ax.set_xticks(ticks, tick_labels, rotation=45, ha="right")
+    ax.set_yticks(ticks, tick_labels)
+    ax.set_xlabel("Predicted label")
+    ax.set_ylabel("True label")
+    # light gridlines between cells
+    ax.set_xticks(np.arange(-.5, cm.shape[1], 1), minor=True)
+    ax.set_yticks(np.arange(-.5, cm.shape[0], 1), minor=True)
+    ax.grid(which="minor", color="white", linewidth=0.6, alpha=0.35)
+    ax.tick_params(which="minor", bottom=False, left=False)
+
+    # colorbar with % ticks
+    cbar = plt.colorbar(im, fraction=0.046, pad=0.04)
+    cbar.set_label("Proportion per true class", rotation=90, labelpad=10)
+    cbar_ticks = np.linspace(0, 1, 6)
+    cbar.set_ticks(cbar_ticks)
+    cbar.set_ticklabels([f"{t:.0%}" for t in cbar_ticks])
+
+    # annotate cells
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            v = cm_normalized[i, j]
+            # skip near-zero to reduce clutter (optional)
+            if v < 0.005:
+                continue
+            txt_color = "white" if v >= 0.6 else "#111"
+            # show percent; add counts in parentheses if you like
+            label = f"{v:.2%}\n({cm[i, j]})"  # or use f"{v:.2%}" for percent only
+            ax.text(j, i, label, ha="center", va="center", fontsize=9, color=txt_color, linespacing=1.1)
+    ax.set_aspect("equal")
+    plt.tight_layout()
+    plt.savefig(cm_norm_img_path, bbox_inches="tight")
+    plt.close()
+
+    logger.info(f"Saved confusion matrix images at:\n - Raw: {cm_img_path}\n - Normalized: {cm_norm_img_path}")
 
     return {
-        "accuracy": accuracy,
-        "cv_mean": cv_mean,
-        "cv_std": cv_std,
-        "auc_score": auc_score,
-        "cm_image_path": str(cm_img_path),
-        "cm_image_url": _to_media_url(cm_img_path),
-        "model_path": str(model_path),
-        "model_url": _to_media_url(model_path),
+    "accuracy": accuracy,
+    "cv_mean": cv_mean,
+    "cv_std": cv_std,
+    "auc_score": auc_score,
+    "cm_image_path": str(cm_img_path),
+    "cm_image_url": _to_media_url(cm_img_path),
+    "cm_norm_image_path": str(cm_norm_img_path),
+    "cm_norm_image_url": _to_media_url(cm_norm_img_path),
+    "model_path": str(model_path),
+    "model_url": _to_media_url(model_path),
     }
+
 
 
 
