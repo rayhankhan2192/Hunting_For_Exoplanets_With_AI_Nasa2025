@@ -8,15 +8,21 @@ import time
 UPLOAD_DIR = (settings.MEDIA_ROOT / "uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# Columns to drop if present (from predictions/augmented CSVs)
+# # Columns to drop if present (from predictions/augmented CSVs)
+# PRED_DERIVED_DROP = {
+#     #"koi_disposition",           # drop existing label to rebuild from Predicted_Class
+#     "Confidence",
+#     "Match",
+#     "Prob_CANDIDATE",
+#     "Prob_CONFIRMED",
+#     "Prob_FALSE POSITIVE",
+# }
 PRED_DERIVED_DROP = {
-    #"koi_disposition",           # drop existing label to rebuild from Predicted_Class
-    "Confidence",
-    "Match",
-    "Prob_CANDIDATE",
-    "Prob_CONFIRMED",
-    "Prob_FALSE POSITIVE",
+    "Confidence", "Match",
+    "Prob_CANDIDATE", "Prob_CONFIRMED",
+    "Prob_FALSE POSITIVE", "Prob_FALSE_POSITIVE",  # both variants
 }
+
 
 # Preferred front-order (and a rule to place koi_disposition)
 PREFERRED_PREFIX = ["kepid", "kepoi_name", "kepler_name"]
@@ -38,31 +44,53 @@ def _clean_columns(cols):
     """Strip whitespace and keep exact names; return list."""
     return [str(c).strip() for c in cols]
 
+# def _preprocess_df(df: pd.DataFrame) -> pd.DataFrame:
+#     """
+#     - Strip whitespace from column names
+#     - Drop prediction-derived columns if present
+#     - Rename Predicted_Class -> koi_disposition (if exists)
+#     """
+#     df = df.copy()
+#     df.columns = _clean_columns(df.columns)
+
+#     # Drop any derived columns that may exist
+#     drops = [c for c in df.columns if c in PRED_DERIVED_DROP]
+#     if drops:
+#         df = df.drop(columns=drops, errors="ignore")
+
+#     # Rename Predicted_Class to koi_disposition (if present)
+#     if "Predicted_Class" in df.columns:
+#         # If koi_disposition exists (rare after drop), fill missing from Predicted_Class then drop Predicted_Class
+#         if "koi_disposition" in df.columns:
+#             # Fill NA only
+#             df["koi_disposition"] = df["koi_disposition"].fillna(df["Predicted_Class"])
+#             df = df.drop(columns=["Predicted_Class"])
+#         else:
+#             df = df.rename(columns={"Predicted_Class": "koi_disposition"})
+
+#     return df
+
 def _preprocess_df(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    - Strip whitespace from column names
-    - Drop prediction-derived columns if present
-    - Rename Predicted_Class -> koi_disposition (if exists)
-    """
     df = df.copy()
     df.columns = _clean_columns(df.columns)
 
-    # Drop any derived columns that may exist
     drops = [c for c in df.columns if c in PRED_DERIVED_DROP]
     if drops:
         df = df.drop(columns=drops, errors="ignore")
 
-    # Rename Predicted_Class to koi_disposition (if present)
     if "Predicted_Class" in df.columns:
-        # If koi_disposition exists (rare after drop), fill missing from Predicted_Class then drop Predicted_Class
         if "koi_disposition" in df.columns:
-            # Fill NA only
             df["koi_disposition"] = df["koi_disposition"].fillna(df["Predicted_Class"])
             df = df.drop(columns=["Predicted_Class"])
         else:
             df = df.rename(columns={"Predicted_Class": "koi_disposition"})
 
+    # Fallback: if koi_disposition still missing, but koi_pdisposition exists, copy it
+    if "koi_disposition" not in df.columns and "koi_pdisposition" in df.columns:
+        df["koi_disposition"] = df["koi_pdisposition"]
+
     return df
+
 
 def _canonical_column_order(all_cols: list[str]) -> list[str]:
     """
