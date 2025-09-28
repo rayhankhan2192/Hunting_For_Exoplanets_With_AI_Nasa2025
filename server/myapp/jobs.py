@@ -42,6 +42,50 @@ def _update_status(job_id: str, **fields):
     JOBS[job_id] = state
     _write_status(job_id, state)
 
+# def _run_training(job_id: str, data_path: str, satellite: str, model_type: str):
+#     log_file = _log_path(job_id)
+#     start = time.time()
+#     _update_status(
+#         job_id,
+#         status="RUNNING",
+#         started_at=start,
+#         params={"data_path": data_path, "satellite": satellite, "model": model_type},
+#         result=None,
+#         error=None,
+#         log_path=str(log_file).replace("\\", "/"),
+#     )
+
+#     with open(log_file, "w", encoding="utf-8") as lf:
+#         with redirect_stdout(lf), redirect_stderr(lf):
+#             print(f"[JOB {job_id}] Starting training...")
+#             print(f"Params: data_path={data_path}, satellite={satellite}, model={model_type}")
+#             print(f"CWD: {os.getcwd()}")
+#             try:
+#                 model_path = train_main(data_path=data_path, satellite=satellite, model_type=model_type)
+#                 elapsed = time.time() - start
+#                 print(f"[JOB {job_id}] Training finished in {elapsed:.2f}s")
+#                 print(f"[JOB {job_id}] Model: {model_path}")
+#                 _update_status(
+#                     job_id,
+#                     status="SUCCEEDED",
+#                     finished_at=time.time(),
+#                     result={
+#                         "elapsed_sec": elapsed, 
+#                         "model_path": model_path,
+#                         "accuracy": model_path,  # placeholder, replace with actual accuracy if available
+#                         },
+#                     error=None,
+#                 )
+#             except Exception as e:
+#                 traceback.print_exc()
+#                 _update_status(
+#                     job_id,
+#                     status="FAILED",
+#                     finished_at=time.time(),
+#                     result=None,
+#                     error=str(e),
+#                 )
+
 def _run_training(job_id: str, data_path: str, satellite: str, model_type: str):
     log_file = _log_path(job_id)
     start = time.time()
@@ -61,15 +105,51 @@ def _run_training(job_id: str, data_path: str, satellite: str, model_type: str):
             print(f"Params: data_path={data_path}, satellite={satellite}, model={model_type}")
             print(f"CWD: {os.getcwd()}")
             try:
-                model_path = train_main(data_path=data_path, satellite=satellite, model_type=model_type)
+                result = train_main(data_path=data_path, satellite=satellite, model_type=model_type)
                 elapsed = time.time() - start
+
+                # ---- normalize return for backward compatibility ----
+                # Expected modern shape: dict with metrics + urls
+                if isinstance(result, dict):
+                    metrics = result
+                # Legacy tuple: (accuracy, cv_mean, cv_std, auc_score, cm_img_path, model_path)
+                elif isinstance(result, tuple) and len(result) >= 6:
+                    accuracy, cv_mean, cv_std, auc_score, cm_img_path, model_path = result[:6]
+                    metrics = {
+                        "accuracy": float(accuracy),
+                        "cv_mean": float(cv_mean),
+                        "cv_std": float(cv_std),
+                        "auc_score": float(auc_score),
+                        "cm_image_path": str(cm_img_path),
+                        "model_path": str(model_path),
+                        # URLs unknown in legacy case
+                        "cm_image_url": None,
+                        "model_url": None,
+                    }
+                # Oldest case: just a model_path string
+                elif isinstance(result, str):
+                    metrics = {
+                        "accuracy": None,
+                        "cv_mean": None,
+                        "cv_std": None,
+                        "auc_score": None,
+                        "cm_image_path": None,
+                        "cm_image_url": None,
+                        "model_path": result,
+                        "model_url": None,
+                    }
+                else:
+                    metrics = {"raw_result": result}
+
+                metrics["elapsed_sec"] = elapsed
                 print(f"[JOB {job_id}] Training finished in {elapsed:.2f}s")
-                print(f"[JOB {job_id}] Model: {model_path}")
+                print(f"[JOB {job_id}] Result: {metrics}")
+
                 _update_status(
                     job_id,
                     status="SUCCEEDED",
                     finished_at=time.time(),
-                    result={"elapsed_sec": elapsed, "model_path": model_path},
+                    result=metrics,
                     error=None,
                 )
             except Exception as e:
@@ -81,6 +161,7 @@ def _run_training(job_id: str, data_path: str, satellite: str, model_type: str):
                     result=None,
                     error=str(e),
                 )
+
 
 def create_training_job(data_path: str, satellite: str, model_type: str) -> dict:
     if not os.path.exists(data_path):
