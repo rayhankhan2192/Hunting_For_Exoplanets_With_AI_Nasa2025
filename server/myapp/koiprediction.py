@@ -3,6 +3,7 @@ import numpy as np
 import joblib
 from pathlib import Path
 import logging
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -12,12 +13,12 @@ formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
-BASE_DIR = Path(__file__).resolve().parents[2]
-SAVED_MODEL_DIR = BASE_DIR / "savedmodel"
-
-MODEL_FILE = SAVED_MODEL_DIR / "KOI_model_xgb.joblib"
-SCALER_FILE = SAVED_MODEL_DIR / "KOI_feature_scaler_xgb.joblib"
-ENCODER_FILE = SAVED_MODEL_DIR / "KOI_target_encoder_xgb.joblib"
+MEDIA_ROOT = Path(settings.MEDIA_ROOT).resolve()
+MEDIA_URL  = settings.MEDIA_URL 
+MODELS_DIR = MEDIA_ROOT / "models"
+MODEL_FILE = MODELS_DIR / "KOI_model_xgb.joblib"
+SCALER_FILE = MODELS_DIR / "KOI_feature_scaler_xgb.joblib"
+ENCODER_FILE = MODELS_DIR / "KOI_target_encoder_xgb.joblib"
 
 _MODEL, _SCALER, _ENCODER = None, None, None
 
