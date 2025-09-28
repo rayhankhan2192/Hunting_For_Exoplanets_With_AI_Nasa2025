@@ -33,7 +33,7 @@
 from django.urls import path
 from .views import (
     StartTrainingView, TrainingStatusView, TrainingLogsView,
-    PredictionView, ListUploadsView, MergeAndTrainView
+    PredictionView, ListUploadsView, MergeAndTrainView, MergeCSVView
 )
 
 urlpatterns = [
@@ -46,6 +46,8 @@ urlpatterns = [
     path("api/predict", PredictionView.as_view(), name="prediction_view"),
 
     # Uploads & Merge+Train
-    path("api/uploads", ListUploadsView.as_view(), name="list_uploads"),
+    path("api/get-uploads-file", ListUploadsView.as_view(), name="list_uploads"),
     path("api/merge-train", MergeAndTrainView.as_view(), name="merge_and_train"),
+
+    path("api/merge", MergeCSVView.as_view(), name="merge_csv"),
 ]

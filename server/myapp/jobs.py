@@ -1,14 +1,14 @@
 import uuid, threading, traceback, time, os, json
 from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
-
+from django.conf import settings
 from main.train import main as train_main  # your training entry
 
 # In-memory cache (best-effort)
 JOBS = {}
 
-BASE_DIR = Path(__file__).resolve().parents[2]  # repo root
-LOG_DIR = BASE_DIR / "logs"
+MEDIA_ROOT = Path(settings.MEDIA_ROOT).resolve()
+LOG_DIR = (MEDIA_ROOT / "logs")
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 VALID_SATELLITES = {"K2", "TOI", "KOI"}
