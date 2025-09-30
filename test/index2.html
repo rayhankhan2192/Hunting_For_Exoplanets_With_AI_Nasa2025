@@ -1,0 +1,45 @@
+<canvas id="stars"></canvas>
+<script>
+const canvas = document.getElementById("stars");
+const ctx = canvas.getContext("2d");
+let stars = [];
+let w, h;
+
+function resize() {
+  w = canvas.width = window.innerWidth;
+  h = canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resize);
+resize();
+
+for (let i = 0; i < 250; i++) {
+  stars.push({
+    x: Math.random() * w,
+    y: Math.random() * h,
+    z: Math.random() * w
+  });
+}
+
+function draw() {
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = "white";
+  for (let star of stars) {
+    let k = 128.0 / star.z;
+    let x = star.x * k + w / 2;
+    let y = star.y * k + h / 2;
+    if (x >= 0 && x <= w && y >= 0 && y <= h) {
+      let size = (1 - star.z / w) * 2;
+      ctx.fillRect(x, y, size, size);
+    }
+    star.z -= 2;
+    if (star.z <= 0) {
+      star.x = Math.random() * w;
+      star.y = Math.random() * h;
+      star.z = w;
+    }
+  }
+  requestAnimationFrame(draw);
+}
+draw();
+</script>

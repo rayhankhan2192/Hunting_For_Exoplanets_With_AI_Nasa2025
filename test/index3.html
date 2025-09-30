@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Exoplanet AI — Interactive Hero</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:#050814;color:#e9f4ff;font-family:Inter,ui-sans-serif,system-ui}
+  .hero{position:relative;height:100vh;overflow:hidden}
+  /* overlay content */
+  .content{
+    position:absolute; inset:0; display:grid; place-items:center; text-align:center; z-index:10; pointer-events:none;
+    padding:0 5vw;
+    background: radial-gradient(1200px 600px at 70% 20%, rgba(56,110,255,.08), transparent 70%),
+                radial-gradient(900px 400px at 15% 85%, rgba(155,107,255,.06), transparent 60%);
+  }
+  h1{font-size:clamp(32px,6vw,64px); line-height:1.05; margin:0 0 8px}
+  p{opacity:.9; margin:0}
+  .cta{margin-top:22px; pointer-events:auto}
+  .btn{
+    display:inline-block; padding:12px 18px; margin:4px; border-radius:14px; border:1px solid #6cf1ff44;
+    background:linear-gradient(180deg,#4fd1ff22,#9b6bff22); text-decoration:none; color:#eaf7ff; font-weight:600;
+    backdrop-filter: blur(6px); box-shadow:0 8px 30px #4fd1ff22; transition:transform .2s, box-shadow .2s, border-color .2s;
+  }
+  .btn:hover{transform:translateY(-2px); border-color:#4fd1ffaa; box-shadow:0 12px 40px #4fd1ff33}
+  /* control HUD */
+  .hud{
+    position:absolute; left:14px; bottom:14px; z-index:12; padding:10px 12px; border-radius:12px;
+    background: #0b1124aa; border:1px solid #4fd1ff33; color:#cfe9ff; font-size:13px; backdrop-filter: blur(6px);
+    pointer-events:auto;
+  }
+  .hud label{display:block; margin:6px 0 2px; opacity:.9}
+  .range{width:220px}
+  /* light curve mini-panel */
+  #curve{
+    position:absolute; right:14px; bottom:14px; width:min(520px,42vw); height:120px; z-index:12;
+    background:#0b1124aa; border:1px solid #4fd1ff33; border-radius:12px; backdrop-filter: blur(6px);
+  }
+  .vignette{position:absolute; inset:-2%; box-shadow:inset 0 0 200px 80px #000a; z-index:5; pointer-events:none}
+  /* helpful cursor */
+  .drag-hint{position:absolute; top:16px; right:16px; z-index:12; opacity:.7; font-size:12px}
+</style>
+</head>
+<body>
+<div class="hero">
+  <!-- WebGL canvas -->
+  <canvas id="scene"></canvas>
+
+  <!-- Overlay content (your hero copy/buttons) -->
+  <div class="content">
+    <div>
+      <h1>Hunt Exoplanets in Real-Time</h1>
+      <p>Drag the planet, watch the transit dip, and feel the stars react to your mouse.</p>
+      <div class="cta">
+        <a class="btn" href="#try">Try the Demo</a>
+        <a class="btn" href="#docs">Docs & Pipeline</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- HUD controls -->
+  <div class="hud">
+    <div><strong>Interactive Transit</strong></div>
+    <label>Orbit Radius</label>
+    <input id="radius" class="range" type="range" min="2" max="10" step="0.1" value="5" />
+    <label>Planet Size</label>
+    <input id="size" class="range" type="range" min="0.3" max="2.0" step="0.05" value="0.9" />
+    <label>Speed</label>
+    <input id="speed" class="range" type="range" min="0.2" max="3.0" step="0.05" value="1.2" />
+    <div style="margin-top:8px;opacity:.8">Tip: drag the planet; scroll to zoom.</div>
+  </div>
+
+  <!-- Light curve canvas -->
+  <canvas id="curve"></canvas>
+
+  <div class="drag-hint">🖱️ Drag planet • Move mouse for parallax</div>
+  <div class="vignette"></div>
+</div>
+
+<!-- Three.js from CDN -->
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+
+<script>
+(function(){
+  // ---------- SCENE SETUP ----------
+  const canvas = document.getElementById('scene');
+  const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x050814, 30, 220);
+
+  const camera = new THREE.PerspectiveCamera(60, 2, 0.1, 1000);
+  camera.position.set(0, 1.2, 12);
+
+  function resize(){
+    const w = canvas.clientWidth = window.innerWidth;
+    const h = canvas.clientHeight = window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize, {passive:true});
+  resize();
+
+  // ---------- STARFIELD ----------
+  const starGeo = new THREE.BufferGeometry();
+  const starCount = 4000;
+  const positions = new Float32Array(starCount*3);
+  for(let i=0;i<starCount;i++){
+    const r = 180*Math.cbrt(Math.random()); // density toward far field
+    const theta = Math.random()*Math.PI*2;
+    const phi = Math.acos(2*Math.random()-1);
+    positions[i*3+0] = r*Math.sin(phi)*Math.cos(theta);
+    positions[i*3+1] = r*(Math.random()*0.1-0.05); // flatter band
+    positions[i*3+2] = r*Math.sin(phi)*Math.sin(theta);
+  }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(positions,3));
+  const starMat = new THREE.PointsMaterial({color:0x9fd7ff, size:0.7, sizeAttenuation:true, transparent:true, opacity:0.9});
+  const stars = new THREE.Points(starGeo, starMat);
+  scene.add(stars);
+
+  // ---------- STAR (the host) ----------
+  const starGroup = new THREE.Group();
+  scene.add(starGroup);
+  const starCore = new THREE.Mesh(
+    new THREE.SphereGeometry(1.8, 48, 48),
+    new THREE.MeshBasicMaterial({color:0xfff1b1})
+  );
+  const glow = new THREE.Mesh(
+    new THREE.SphereGeometry(2.7, 48, 48),
+    new THREE.MeshBasicMaterial({color:0xffd080, transparent:true, opacity:0.22})
+  );
+  starGroup.add(glow, starCore);
+  starGroup.position.set(0, 0, 0);
+
+  // ---------- PLANET ----------
+  const planet = new THREE.Mesh(
+    new THREE.SphereGeometry(0.9, 48, 48),
+    new THREE.MeshStandardMaterial({color:0x2b4e7a, metalness:0.1, roughness:0.9})
+  );
+  const planetHalo = new THREE.Mesh(
+    new THREE.SphereGeometry(1.1, 32, 32),
+    new THREE.MeshBasicMaterial({color:0x4fd1ff, transparent:true, opacity:0.15})
+  );
+  const planetGroup = new THREE.Group();
+  planetGroup.add(planetHalo, planet);
+  scene.add(planetGroup);
+
+  // Light for planet rim
+  const rimLight = new THREE.DirectionalLight(0x7fd8ff, 1.2);
+  rimLight.position.set(-2,1,3);
+  scene.add(rimLight);
+
+  // ---------- ORBIT PATH ----------
+  const orbitMat = new THREE.LineBasicMaterial({color:0x4fd1ff, transparent:true, opacity:0.25});
+  let orbitMesh;
+  function setOrbit(radius){
+    if(orbitMesh) scene.remove(orbitMesh);
+    const g = new THREE.EllipseCurve(0,0, radius, radius, 0, Math.PI*2);
+    const pts = g.getPoints(256).map(p => new THREE.Vector3(p.x, 0, p.y));
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    orbitMesh = new THREE.LineLoop(geo, orbitMat);
+    scene.add(orbitMesh);
+  }
+
+  // ---------- CONTROLS ----------
+  const radiusEl = document.getElementById('radius');
+  const sizeEl   = document.getElementById('size');
+  const speedEl  = document.getElementById('speed');
+  let orbitR = parseFloat(radiusEl.value);
+  let planetSize = parseFloat(sizeEl.value);
+  let speed = parseFloat(speedEl.value);
+  setOrbit(orbitR);
+  planet.scale.setScalar(planetSize);
+  planetHalo.scale.setScalar(planetSize*1.2);
+
+  radiusEl.oninput = e => { orbitR = parseFloat(e.target.value); setOrbit(orbitR); };
+  sizeEl.oninput   = e => { planetSize = parseFloat(e.target.value); planet.scale.setScalar(planetSize); planetHalo.scale.setScalar(planetSize*1.2); };
+  speedEl.oninput  = e => { speed = parseFloat(e.target.value); };
+
+  // ---------- DRAG TO SET PHASE ----------
+  const ray = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  let dragging = false;
+  function onPointerDown(e){
+    dragging = true; updateMouse(e); setPhaseFromMouse();
+  }
+  function onPointerUp(){ dragging = false; }
+  function onPointerMove(e){
+    updateMouse(e);
+    if(dragging) setPhaseFromMouse();
+    // parallax
+    const kx = (mouse.x)*0.3, ky = (mouse.y)*0.15;
+    camera.position.x = kx*4; camera.position.y = 1.2 + ky*3;
+    camera.lookAt(0,0,0);
+  }
+  function updateMouse(e){
+    const rect = canvas.getBoundingClientRect();
+    mouse.x = ((e.clientX - rect.left)/rect.width)*2 - 1;
+    mouse.y = -((e.clientY - rect.top)/rect.height)*2 + 1;
+  }
+  function setPhaseFromMouse(){
+    // project mouse onto orbital plane (y=0)
+    ray.setFromCamera(mouse, camera);
+    const t = -ray.ray.origin.y / ray.ray.direction.y;
+    const hit = ray.ray.at(t, new THREE.Vector3());
+    const a = Math.atan2(hit.z, hit.x);
+    phase = a; // radians
+  }
+  canvas.addEventListener('pointerdown', onPointerDown);
+  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointermove', onPointerMove, {passive:true});
+  window.addEventListener('wheel', (e)=>{ camera.position.z = Math.min(26, Math.max(6, camera.position.z + (e.deltaY>0?0.6:-0.6))); }, {passive:true});
+
+  // ---------- LIGHT CURVE ----------
+  const curveCanvas = document.getElementById('curve');
+  const cctx = curveCanvas.getContext('2d');
+  function resizeCurve(){
+    curveCanvas.width = curveCanvas.clientWidth = curveCanvas.offsetWidth;
+    curveCanvas.height = curveCanvas.clientHeight = curveCanvas.offsetHeight;
+  }
+  new ResizeObserver(resizeCurve).observe(curveCanvas); resizeCurve();
+  const curveBuf = [];
+  const MAXN = 480;
+
+  // overlap area of two circles (for approximate flux dip)
+  function overlapArea(R, r, d){
+    if (d >= R + r) return 0;
+    if (d <= Math.abs(R - r)) return Math.PI * Math.min(R, r) ** 2;
+    const alpha = 2 * Math.acos((d*d + R*R - r*r) / (2*d*R));
+    const beta  = 2 * Math.acos((d*d + r*r - R*R) / (2*d*r));
+    const area1 = 0.5 * R*R * (alpha - Math.sin(alpha));
+    const area2 = 0.5 * r*r * (beta - Math.sin(beta));
+    return area1 + area2;
+  }
+
+  function drawCurve(flux){
+    curveBuf.push(flux); if(curveBuf.length>MAXN) curveBuf.shift();
+    const w = curveCanvas.width, h = curveCanvas.height;
+    cctx.clearRect(0,0,w,h);
+    // panel grid
+    cctx.strokeStyle = 'rgba(255,255,255,.15)'; cctx.lineWidth=1;
+    cctx.beginPath(); cctx.moveTo(40,20); cctx.lineTo(40,h-30); cctx.lineTo(w-15,h-30); cctx.stroke();
+    // labels
+    cctx.fillStyle='rgba(255,255,255,.75)'; cctx.font='12px system-ui';
+    cctx.fillText('Transit Light Curve', 14, 14);
+    // curve
+    const left=40, right=w-15, top=24, bottom=h-30;
+    const gh = bottom-top, gw = right-left;
+    const minF=0.92, maxF=1.02;
+    const grad = cctx.createLinearGradient(left,0,right,0);
+    grad.addColorStop(0,'#4fd1ff'); grad.addColorStop(1,'#9b6bff');
+    cctx.strokeStyle = grad; cctx.lineWidth=2;
+    cctx.beginPath();
+    for(let i=0;i<curveBuf.length;i++){
+      const x = left + (i/(MAXN-1))*gw;
+      const y = bottom - ((curveBuf[i]-minF)/(maxF-minF))*gh;
+      if(i===0) cctx.moveTo(x,y); else cctx.lineTo(x,y);
+    }
+    cctx.stroke();
+  }
+
+  // ---------- ANIMATION ----------
+  let phase = 0; // radians along orbit
+  let last = performance.now();
+  function tick(now){
+    const dt = Math.min(0.05,(now-last)/1000); last=now;
+
+    // soft star twinkle & background drift
+    stars.rotation.y += dt*0.002;
+    starGroup.rotation.y += dt*0.05;
+
+    // advance phase if not dragging
+    if(!dragging) phase += dt*speed*0.7;
+
+    // place planet on orbit (y≈0 plane)
+    const x = Math.cos(phase)*orbitR;
+    const z = Math.sin(phase)*orbitR;
+    planetGroup.position.set(x, 0, z);
+
+    // Compute flux (simple): scale to star/planet apparent radii in screen space
+    // Project positions to view to approximate center distance in pixels
+    const starCenter = starGroup.getWorldPosition(new THREE.Vector3());
+    const planetCenter = planetGroup.getWorldPosition(new THREE.Vector3());
+
+    // apparent radii heuristics (scale with distance)
+    const starDist = starCenter.distanceTo(camera.position);
+    const planetDist = planetCenter.distanceTo(camera.position);
+    const R = 1400 / starDist; // px-ish
+    const r = (700 * planetSize) / planetDist;
+
+    // screen-space center distance
+    const toScreen = (v)=>{
+      v = v.clone().project(camera);
+      return new THREE.Vector2((v.x+1)*0.5*renderer.domElement.width,(1-(v.y+1)*0.5)*renderer.domElement.height);
+    };
+    const s2 = toScreen(starCenter);
+    const p2 = toScreen(planetCenter);
+    const d = s2.distanceTo(p2);
+
+    const overlap = overlapArea(R, r, d);
+    let flux = 1 - (overlap / (Math.PI * R * R)) * 0.95; // exaggerate a touch
+    flux = Math.max(0.85, Math.min(1.02, flux));
+    drawCurve(flux);
+
+    // slight camera drift for life
+    camera.position.z += Math.sin(now*0.0002)*0.003;
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

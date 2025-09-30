@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Exoplanet AI — Landing</title>
+<style>
+  :root{
+    --bg-1:#060913; /* deep space */
+    --bg-2:#0c1330; /* indigo */
+    --bg-3:#03040a; /* near-black */
+    --glow:#4fd1ff; /* cyan glow */
+    --accent:#9b6bff; /* purple accent */
+    --grid:#1b2040;  /* grid lines */
+  }
+
+  /* Page reset */
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+    color:#e7ecff;
+    background: radial-gradient(1200px 700px at 70% 30%, #0b1027 0%, transparent 60%),
+                radial-gradient(900px 500px at 20% 70%, #110d2a 0%, transparent 55%),
+                linear-gradient(135deg, var(--bg-1), var(--bg-2) 50%, var(--bg-3));
+    overflow:hidden;
+  }
+
+  /* Hero container */
+  .hero {
+    position:relative;
+    height:100vh;
+    width:100%;
+    display:grid;
+    place-items:center;
+    isolation:isolate;
+  }
+
+  /* Subtle AI grid */
+  .ai-grid{
+    position:absolute;
+    inset:0;
+    background:
+      linear-gradient(transparent 31px, var(--grid) 32px),
+      linear-gradient(90deg, transparent 31px, var(--grid) 32px);
+    background-size:32px 32px, 32px 32px;
+    opacity:.12;
+    mask-image: radial-gradient(70% 70% at 50% 50%, black, transparent 80%);
+    pointer-events:none;
+  }
+
+  /* Orbits (SVG overlay) */
+  .orbits{
+    position:absolute;
+    inset:0;
+    opacity:.25;
+    filter: drop-shadow(0 0 8px rgba(79,209,255,.15));
+    pointer-events:none;
+  }
+  .orbits svg{width:100%;height:100%}
+
+  /* Stars: multiple parallax layers using tiny gradients */
+  .stars, .stars-2, .stars-3{
+    position:absolute; inset:0;
+    background-repeat:repeat;
+    background-size: 3px 3px, 2px 2px;
+    animation: drift 120s linear infinite;
+    pointer-events:none;
+  }
+  .stars{
+    background-image:
+      radial-gradient(1px 1px at 20px 30px, #fff8, transparent 70%),
+      radial-gradient(1px 1px at 60px 80px, #cfffff88, transparent 70%);
+    opacity:.6;
+  }
+  .stars-2{
+    background-image:
+      radial-gradient(1px 1px at 10px 50px, #fff6, transparent 70%),
+      radial-gradient(1px 1px at 90px 10px, #b7c4ff77, transparent 70%);
+    animation-duration: 180s;
+    opacity:.45;
+  }
+  .stars-3{
+    background-image:
+      radial-gradient(1px 1px at 40px 20px, #fff5, transparent 70%),
+      radial-gradient(1px 1px at 70px 70px, #99e0ff66, transparent 70%);
+    animation-duration: 240s;
+    opacity:.35;
+  }
+  @keyframes drift {
+    from { background-position: 0 0, 0 0; }
+    to   { background-position: 5000px 3000px, -3000px 5000px; }
+  }
+
+  /* Center content (put your headline/buttons here) */
+  .content{
+    position:relative;
+    z-index:5;
+    text-align:center;
+    padding:0 6vw;
+  }
+  .title{
+    font-size: clamp(32px, 6vw, 64px);
+    font-weight:800;
+    letter-spacing:0.02em;
+    line-height:1.05;
+    text-shadow: 0 8px 40px rgba(79,209,255,.2);
+  }
+  .subtitle{
+    margin-top:14px;
+    font-size: clamp(14px, 2.2vw, 18px);
+    opacity:.85;
+  }
+  .cta{
+    margin-top:28px;
+    display:inline-flex;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  .btn{
+    padding:12px 18px;
+    border-radius:14px;
+    border:1px solid rgba(255,255,255,.18);
+    background: linear-gradient(180deg, rgba(79,209,255,.18), rgba(155,107,255,.18));
+    backdrop-filter: blur(6px);
+    color:#eaf7ff;
+    text-decoration:none;
+    font-weight:600;
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+    box-shadow: 0 8px 30px rgba(79,209,255,.12);
+  }
+  .btn:hover{
+    transform: translateY(-2px);
+    border-color: rgba(79,209,255,.6);
+    box-shadow: 0 12px 40px rgba(79,209,255,.22);
+  }
+
+  /* The transit-method animation canvas sits behind content */
+  #transitCanvas{
+    position:absolute;
+    inset:0;
+    z-index:1;
+    opacity:.55; /* keep subtle */
+  }
+
+  /* Soft vignette */
+  .vignette{
+    position:absolute; inset:-2%;
+    box-shadow: inset 0 0 220px 80px rgba(0,0,0,.75);
+    pointer-events:none;
+    z-index:6;
+  }
+</style>
+</head>
+<body>
+  <div class="hero">
+    <!-- Decorative layers -->
+    <div class="ai-grid"></div>
+    <canvas id="transitCanvas"></canvas>
+    <div class="orbits" aria-hidden="true">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
+        <g stroke="url(#grad)" fill="none" stroke-width=".12">
+          <circle cx="50" cy="50" r="18"/>
+          <circle cx="50" cy="50" r="28"/>
+          <circle cx="50" cy="50" r="40"/>
+          <circle cx="50" cy="50" r="46"/>
+        </g>
+        <defs>
+          <radialGradient id="grad">
+            <stop offset="0%" stop-color="#4fd1ff"/>
+            <stop offset="100%" stop-color="#9b6bff"/>
+          </radialGradient>
+        </defs>
+      </svg>
+    </div>
+    <div class="stars"></div>
+    <div class="stars-2"></div>
+    <div class="stars-3"></div>
+
+    <!-- Your hero content -->
+    <div class="content">
+      <h1 class="title">Hunting Exoplanets with AI</h1>
+      <p class="subtitle">Analyze Kepler · K2 · TESS data, classify candidates, and uncover new worlds — all in your browser.</p>
+      <div class="cta">
+        <a class="btn" href="#try">Try the Demo</a>
+        <a class="btn" href="#docs">Docs & Pipeline</a>
+      </div>
+    </div>
+
+    <div class="vignette"></div>
+  </div>
+
+<script>
+/* Transit Method Animation — a planet crossing a star with a subtle light-dip graph */
+(function(){
+  const c = document.getElementById('transitCanvas');
+  const ctx = c.getContext('2d');
+  let w, h, dpr;
+
+  function resize(){
+    dpr = Math.max(1, window.devicePixelRatio || 1);
+    w = c.clientWidth;
+    h = c.clientHeight;
+    c.width  = Math.floor(w * dpr);
+    c.height = Math.floor(h * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize', resize, {passive:true});
+  resize();
+
+  // Star + planet params
+  let t = 0;
+  const star = { x: 0.68, y: 0.38, r: 110 }; // relative position will be scaled
+  const planet = { r: 20, speed: 0.35 }; // px per second scaled later
+  const pathY = 0.38;
+
+  // Light curve buffer (simple)
+  const curve = [];
+  const maxPoints = 240; // resolution of curve
+
+  function drawStar(x, y, r){
+    // star glow
+    const g = ctx.createRadialGradient(x, y, r*0.1, x, y, r*1.8);
+    g.addColorStop(0, 'rgba(255, 248, 220, .95)');
+    g.addColorStop(0.35, 'rgba(255, 232, 180, .55)');
+    g.addColorStop(1, 'rgba(79, 209, 255, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r*1.8, 0, Math.PI*2);
+    ctx.fill();
+
+    // core
+    const g2 = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g2.addColorStop(0, 'rgba(255,255,220,1)');
+    g2.addColorStop(1, 'rgba(255,220,120,.25)');
+    ctx.fillStyle = g2;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  function drawPlanet(x, y, r){
+    ctx.fillStyle = 'rgba(10, 20, 40, .95)';
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fill();
+
+    // rim light
+    const grd = ctx.createRadialGradient(x - r*0.5, y - r*0.5, r*0.2, x, y, r);
+    grd.addColorStop(0, 'rgba(79,209,255,.35)');
+    grd.addColorStop(1, 'rgba(79,209,255,0)');
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(x, y, r*1.2, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  function computeDip(starX, starY, starR, px, py, pr){
+    // approximate flux dip: overlap area between two circles normalized by star disk area
+    const dx = px - starX, dy = py - starY;
+    const d = Math.hypot(dx, dy);
+    const R = starR, r = pr;
+    if (d >= R + r) return 0;
+    if (d <= Math.abs(R - r)) {
+      // full occultation of smaller circle portion on star disk
+      const area = Math.PI * Math.min(R, r) ** 2;
+      return (r < R ? (area / (Math.PI * R * R)) : 0); // if planet bigger than star (won't happen), ignore
+    }
+    const alpha = 2 * Math.acos((d*d + R*R - r*r) / (2*d*R));
+    const beta  = 2 * Math.acos((d*d + r*r - R*R) / (2*d*r));
+    const area1 = 0.5 * R*R * (alpha - Math.sin(alpha));
+    const area2 = 0.5 * r*r * (beta - Math.sin(beta));
+    const overlap = area1 + area2;
+    return overlap / (Math.PI * R * R);
+  }
+
+  let last = performance.now();
+  function tick(now){
+    const dt = Math.min(0.05, (now - last)/1000); // clamp
+    last = now;
+    t += dt;
+
+    ctx.clearRect(0,0,w,h);
+
+    // Scale relative positions
+    const sx = star.x * w;
+    const sy = star.y * h;
+    const sr = Math.min(w,h) * 0.12;
+
+    drawStar(sx, sy, sr);
+
+    // Planet moves left->right across the star line
+    const trackWidth = w * 0.7;
+    const startX = w*0.15;
+    const px = startX + ((t * (trackWidth * planet.speed)) % (trackWidth + 2*sr)) - sr;
+    const py = pathY * h + Math.sin(t*0.3) * 6; // tiny wobble
+    const pr = Math.max(10, Math.min(w,h) * 0.018);
+
+    drawPlanet(px, py, pr);
+
+    // Compute instantaneous flux: 1 - dip
+    const dip = computeDip(sx, sy, sr, px, py, pr);
+    const flux = 1 - dip * 0.8; // exaggerate a bit for visibility
+
+    // Push to curve buffer
+    curve.push(flux);
+    if (curve.length > maxPoints) curve.shift();
+
+    // Draw mini light curve
+    const gx = 36, gy = h - 140, gw = Math.min(520, w - 72), gh = 90;
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    // panel
+    ctx.fillStyle = 'rgba(10,14,28,.55)';
+    ctx.fillRect(gx-10, gy-18, gw+20, gh+36);
+    ctx.strokeStyle = 'rgba(79,209,255,.28)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(gx-10, gy-18, gw+20, gh+36);
+
+    // axes
+    ctx.strokeStyle = 'rgba(255,255,255,.18)';
+    ctx.beginPath();
+    ctx.moveTo(gx, gy);
+    ctx.lineTo(gx, gy+gh);
+    ctx.lineTo(gx+gw, gy+gh);
+    ctx.stroke();
+
+    // curve
+    ctx.beginPath();
+    const n = curve.length;
+    for (let i=0;i<n;i++){
+      const x = gx + (i/(maxPoints-1))*gw;
+      const y = gy + gh - (curve[i] - 0.2) * (gh/0.9);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    const grad = ctx.createLinearGradient(gx,gy,gx+gw,gy);
+    grad.addColorStop(0,'rgba(79,209,255,.9)');
+    grad.addColorStop(1,'rgba(155,107,255,.9)');
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // label
+    ctx.fillStyle = 'rgba(255,255,255,.7)';
+    ctx.font = '12px ui-sans-serif, system-ui';
+    ctx.fillText('Transit Light Curve (simulated)', gx, gy-6);
+    ctx.restore();
+
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
