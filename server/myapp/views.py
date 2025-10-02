@@ -195,36 +195,215 @@ class TrainingLogsView(APIView):
         return Response({"ok": True, "job_id": job_id, "tail": tail, "logs": logs})
 
 
+# class PredictionView(APIView):
+#     """
+#     Predict on an uploaded CSV (multipart):
+#       - Required form fields: satellite (e.g., "KOI"), file (CSV)
+#       - Optional: from_csv_range, to_csv_range
+#     """
+
+#     def post(self, request, *args, **kwargs):
+#         try:
+#             satellite = (request.data.get("satellite") or "").upper().strip()
+#             if not satellite:
+#                 return Response(
+#                     {"ok": False, "error": "Missing satellite parameter"},
+#                     status=status.HTTP_400_BAD_REQUEST,
+#                 )
+
+#             file_obj = request.FILES.get("file")
+#             if not file_obj:
+#                 return Response(
+#                     {"ok": False, "error": "Missing CSV file"},
+#                     status=status.HTTP_400_BAD_REQUEST,
+#                 )
+
+#             orig_name = os.path.basename(file_obj.name)
+#             stem, ext = os.path.splitext(orig_name)
+#             if ext.lower() != ".csv":
+#                 return Response(
+#                     {"ok": False, "error": "Only .csv files are allowed."},
+#                     status=status.HTTP_400_BAD_REQUEST,
+#                 )
+
+#             safe_name = f"{slugify(stem)}{ext.lower() or '.csv'}"
+#             tmp_path = UPLOAD_DIR / safe_name
+#             with open(tmp_path, "wb+") as f:
+#                 for chunk in file_obj.chunks():
+#                     f.write(chunk)
+
+#             # Accept both 'from_csv_range' / 'to_csv_range' and the common typo key seen in your code
+#             from_raw = request.data.get("from_csv_range")
+#             if from_raw is None:
+#                 from_raw = request.data.get("from_csv_rabge")
+#             to_raw = request.data.get("to_csv_range")
+
+#             from_row = _to_int_or_none(from_raw)
+#             to_row = _to_int_or_none(to_raw)
+
+#             df_len = None
+#             if from_row is None and to_row is None:
+#                 row_numbers = None
+#             else:
+#                 if from_row is None:
+#                     from_row = 0
+#                 if to_row is None:
+#                     if df_len is None:
+#                         df_len = pd.read_csv(tmp_path, comment="#").shape[0]
+#                     to_row = df_len - 1
+
+#                 if df_len is None:
+#                     df_len = pd.read_csv(tmp_path, comment="#").shape[0]
+
+#                 from_row = max(0, from_row)
+#                 to_row = min(df_len - 1, to_row)
+
+#                 if from_row > to_row:
+#                     return Response(
+#                         {"ok": False, "error": "Invalid row range: from_row > to_row"},
+#                         status=status.HTTP_400_BAD_REQUEST,
+#                     )
+
+#                 row_numbers = list(range(from_row, to_row + 1))
+
+#             if satellite == "KOI":
+#                 results_df = koiprediction.predict_from_csv(str(tmp_path), row_numbers)
+#             else:
+#                 return Response(
+#                     {"ok": False, "error": f"Satellite {satellite} not supported yet"},
+#                     status=status.HTTP_400_BAD_REQUEST,
+#                 )
+
+#             if results_df is None or results_df.empty:
+#                 return Response(
+#                     {"ok": False, "error": "Prediction failed"},
+#                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#                 )
+
+#             df_raw = pd.read_csv(tmp_path, comment="#")
+
+#             # Determine prediction/prob columns to append
+#             pred_cols = []
+#             if "Predicted_Class" in results_df.columns:
+#                 pred_cols.append("Predicted_Class")
+#             for c in ["Confidence", "Match"]:
+#                 if c in results_df.columns and c not in pred_cols:
+#                     pred_cols.append(c)
+#             prob_cols = [c for c in results_df.columns if str(c).startswith("Prob_")]
+#             pred_cols.extend([c for c in prob_cols if c not in pred_cols])
+
+#             if not pred_cols:
+#                 first_col = results_df.columns[0]
+#                 pred_cols.append(first_col)
+#                 pred_cols.extend([c for c in results_df.columns if "prob" in str(c).lower() and c != first_col])
+
+#             # Prepare output columns (avoid collisions)
+#             for c in pred_cols:
+#                 out_col = c
+#                 if out_col in df_raw.columns:
+#                     i = 2
+#                     while f"{c}__pred{i}" in df_raw.columns:
+#                         i += 1
+#                     out_col = f"{c}__pred{i}"
+#                 df_raw[out_col] = pd.NA
+
+#             # Map from results col -> actual output col in df_raw
+#             out_name_map = {}
+#             for c in pred_cols:
+#                 if c in df_raw.columns:
+#                     out_name_map[c] = c
+#                 else:
+#                     found = None
+#                     for cc in df_raw.columns:
+#                         if cc == c or cc.startswith(f"{c}__pred"):
+#                             found = cc
+#                             break
+#                     out_name_map[c] = found or c
+
+#             # Insert values either for slice or all rows
+#             if row_numbers is None:
+#                 if len(results_df) != len(df_raw):
+#                     return Response(
+#                         {"ok": False, "error": "Prediction length mismatch with input rows"},
+#                         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#                     )
+#                 for c in pred_cols:
+#                     df_raw[out_name_map[c]] = results_df[c].values if c in results_df.columns else pd.NA
+#                 from_resp, to_resp = 0, len(df_raw) - 1
+#             else:
+#                 if len(results_df) != len(row_numbers):
+#                     return Response(
+#                         {"ok": False, "error": "Prediction length mismatch with requested row range"},
+#                         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#                     )
+#                 for c in pred_cols:
+#                     vals = results_df[c].values if c in results_df.columns else [pd.NA] * len(row_numbers)
+#                     df_raw.loc[row_numbers, out_name_map[c]] = list(vals)
+#                 from_resp, to_resp = row_numbers[0], row_numbers[-1]
+
+#             ts = time.strftime("%Y%m%d-%H%M%S")
+#             pred_name = f"{Path(safe_name).stem}__pred_{satellite}_{ts}.csv"
+#             output_file = (UPLOAD_DIR / pred_name)
+#             df_raw.to_csv(output_file, index=False)
+#             csv_url = f"{settings.MEDIA_URL}uploads/{pred_name}"
+
+#             if row_numbers is None:
+#                 total_rows = pd.read_csv(tmp_path, comment="#").shape[0]
+#                 from_row_resp, to_row_resp = 0, total_rows - 1
+#             else:
+#                 from_row_resp, to_row_resp = from_resp, to_resp
+
+#             # sanitize NaN/inf -> None for JSON
+#             results_safe = (
+#                 results_df.replace({np.nan: None, np.inf: None, -np.inf: None}).to_dict(orient="records")
+#             )
+
+#             return Response(
+#                 {
+#                     "ok": True,
+#                     "satellite": satellite,
+#                     "from_row": from_row_resp,
+#                     "to_row": to_row_resp,
+#                     "total_predicted": len(results_df),
+#                     "csv_file": request.build_absolute_uri(csv_url),
+#                     "results": results_safe,
+#                 },
+#                 status=status.HTTP_200_OK,
+#             )
+
+#         except Exception as e:
+#             return Response({"ok": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+from . import k2prediction
 class PredictionView(APIView):
     """
-    Predict on an uploaded CSV (multipart):
-      - Required form fields: satellite (e.g., "KOI"), file (CSV)
-      - Optional: from_csv_range, to_csv_range
+    POST (multipart form):
+      - satellite: "KOI" | "K2" | "TESS" | "TOI" (case-insensitive)
+      - model_type: "xgb" | "rf" | "logreg" | "svc" | ... (optional, default "xgb")
+      - file: CSV
+      - from_csv_range: optional int
+      - to_csv_range: optional int
     """
 
     def post(self, request, *args, **kwargs):
         try:
             satellite = (request.data.get("satellite") or "").upper().strip()
             if not satellite:
-                return Response(
-                    {"ok": False, "error": "Missing satellite parameter"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return Response({"ok": False, "error": "Missing satellite parameter"},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+            model_type = (request.data.get("model_type") or "xgb").lower().strip()
 
             file_obj = request.FILES.get("file")
             if not file_obj:
-                return Response(
-                    {"ok": False, "error": "Missing CSV file"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return Response({"ok": False, "error": "Missing CSV file"},
+                                status=status.HTTP_400_BAD_REQUEST)
 
             orig_name = os.path.basename(file_obj.name)
             stem, ext = os.path.splitext(orig_name)
             if ext.lower() != ".csv":
-                return Response(
-                    {"ok": False, "error": "Only .csv files are allowed."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return Response({"ok": False, "error": "Only .csv files are allowed."},
+                                status=status.HTTP_400_BAD_REQUEST)
 
             safe_name = f"{slugify(stem)}{ext.lower() or '.csv'}"
             tmp_path = UPLOAD_DIR / safe_name
@@ -232,12 +411,9 @@ class PredictionView(APIView):
                 for chunk in file_obj.chunks():
                     f.write(chunk)
 
-            # Accept both 'from_csv_range' / 'to_csv_range' and the common typo key seen in your code
-            from_raw = request.data.get("from_csv_range")
-            if from_raw is None:
-                from_raw = request.data.get("from_csv_rabge")
+            # range
+            from_raw = request.data.get("from_csv_range") or request.data.get("from_csv_rabge")
             to_raw = request.data.get("to_csv_range")
-
             from_row = _to_int_or_none(from_raw)
             to_row = _to_int_or_none(to_raw)
 
@@ -245,44 +421,41 @@ class PredictionView(APIView):
             if from_row is None and to_row is None:
                 row_numbers = None
             else:
+                if df_len is None:
+                    df_len = pd.read_csv(tmp_path, comment="#").shape[0]
                 if from_row is None:
                     from_row = 0
                 if to_row is None:
-                    if df_len is None:
-                        df_len = pd.read_csv(tmp_path, comment="#").shape[0]
                     to_row = df_len - 1
-
-                if df_len is None:
-                    df_len = pd.read_csv(tmp_path, comment="#").shape[0]
 
                 from_row = max(0, from_row)
                 to_row = min(df_len - 1, to_row)
-
                 if from_row > to_row:
-                    return Response(
-                        {"ok": False, "error": "Invalid row range: from_row > to_row"},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
+                    return Response({"ok": False, "error": "Invalid row range: from_row > to_row"},
+                                    status=status.HTTP_400_BAD_REQUEST)
                 row_numbers = list(range(from_row, to_row + 1))
 
+            # dispatch by satellite
             if satellite == "KOI":
-                results_df = koiprediction.predict_from_csv(str(tmp_path), row_numbers)
-            else:
-                return Response(
-                    {"ok": False, "error": f"Satellite {satellite} not supported yet"},
-                    status=status.HTTP_400_BAD_REQUEST,
+                results_df = koiprediction.predict_from_csv(
+                    str(tmp_path), satellite=satellite, row_numbers=row_numbers, model_type=model_type
                 )
+            elif satellite == "K2":
+                results_df = k2prediction.predict_from_csv(
+                    str(tmp_path), satellite=satellite, row_numbers=row_numbers, model_type=model_type
+                )
+            else:
+                return Response({"ok": False, "error": f"Satellite {satellite} not supported yet"},
+                                status=status.HTTP_400_BAD_REQUEST)
+
 
             if results_df is None or results_df.empty:
-                return Response(
-                    {"ok": False, "error": "Prediction failed"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
+                return Response({"ok": False, "error": "Prediction failed"},
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             df_raw = pd.read_csv(tmp_path, comment="#")
 
-            # Determine prediction/prob columns to append
+            # prediction/proba columns to append
             pred_cols = []
             if "Predicted_Class" in results_df.columns:
                 pred_cols.append("Predicted_Class")
@@ -297,7 +470,7 @@ class PredictionView(APIView):
                 pred_cols.append(first_col)
                 pred_cols.extend([c for c in results_df.columns if "prob" in str(c).lower() and c != first_col])
 
-            # Prepare output columns (avoid collisions)
+            # ensure no collisions
             for c in pred_cols:
                 out_col = c
                 if out_col in df_raw.columns:
@@ -307,73 +480,64 @@ class PredictionView(APIView):
                     out_col = f"{c}__pred{i}"
                 df_raw[out_col] = pd.NA
 
-            # Map from results col -> actual output col in df_raw
+            # map results -> df_raw output col
             out_name_map = {}
             for c in pred_cols:
                 if c in df_raw.columns:
                     out_name_map[c] = c
                 else:
-                    found = None
-                    for cc in df_raw.columns:
-                        if cc == c or cc.startswith(f"{c}__pred"):
-                            found = cc
-                            break
-                    out_name_map[c] = found or c
+                    match = next((cc for cc in df_raw.columns if cc == c or cc.startswith(f"{c}__pred")), None)
+                    out_name_map[c] = match or c
 
-            # Insert values either for slice or all rows
+            # write back rows
             if row_numbers is None:
                 if len(results_df) != len(df_raw):
-                    return Response(
-                        {"ok": False, "error": "Prediction length mismatch with input rows"},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    )
+                    return Response({"ok": False, "error": "Prediction length mismatch with input rows"},
+                                    status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 for c in pred_cols:
                     df_raw[out_name_map[c]] = results_df[c].values if c in results_df.columns else pd.NA
                 from_resp, to_resp = 0, len(df_raw) - 1
             else:
                 if len(results_df) != len(row_numbers):
-                    return Response(
-                        {"ok": False, "error": "Prediction length mismatch with requested row range"},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    )
+                    return Response({"ok": False, "error": "Prediction length mismatch with requested row range"},
+                                    status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 for c in pred_cols:
                     vals = results_df[c].values if c in results_df.columns else [pd.NA] * len(row_numbers)
                     df_raw.loc[row_numbers, out_name_map[c]] = list(vals)
                 from_resp, to_resp = row_numbers[0], row_numbers[-1]
 
             ts = time.strftime("%Y%m%d-%H%M%S")
-            pred_name = f"{Path(safe_name).stem}__pred_{satellite}_{ts}.csv"
+            pred_name = f"{Path(safe_name).stem}__pred_{satellite}_{model_type}_{ts}.csv"
             output_file = (UPLOAD_DIR / pred_name)
             df_raw.to_csv(output_file, index=False)
             csv_url = f"{settings.MEDIA_URL}uploads/{pred_name}"
 
+            # JSON-safe results
+            results_safe = results_df.replace({np.nan: None, np.inf: None, -np.inf: None}).to_dict(orient="records")
+
+            # final response
             if row_numbers is None:
                 total_rows = pd.read_csv(tmp_path, comment="#").shape[0]
                 from_row_resp, to_row_resp = 0, total_rows - 1
             else:
                 from_row_resp, to_row_resp = from_resp, to_resp
 
-            # sanitize NaN/inf -> None for JSON
-            results_safe = (
-                results_df.replace({np.nan: None, np.inf: None, -np.inf: None}).to_dict(orient="records")
-            )
+            return Response({
+                "ok": True,
+                "satellite": satellite,
+                "model_type": model_type,
+                "from_row": from_row_resp,
+                "to_row": to_row_resp,
+                "total_predicted": len(results_df),
+                "csv_file": request.build_absolute_uri(csv_url),
+                "results": results_safe,
+            }, status=status.HTTP_200_OK)
 
-            return Response(
-                {
-                    "ok": True,
-                    "satellite": satellite,
-                    "from_row": from_row_resp,
-                    "to_row": to_row_resp,
-                    "total_predicted": len(results_df),
-                    "csv_file": request.build_absolute_uri(csv_url),
-                    "results": results_safe,
-                },
-                status=status.HTTP_200_OK,
-            )
-
+        except FileNotFoundError as e:
+            return Response({"ok": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"ok": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+            # optional: log.exception(...)
+            return Response({"ok": False, "error": f"Unexpected error: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ListUploadsView(APIView):
     def get(self, request):
