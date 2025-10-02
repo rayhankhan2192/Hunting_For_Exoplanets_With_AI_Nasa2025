@@ -35,7 +35,7 @@ def spec_first_letter(s):
 
 def preprocess_features(df, satellite):
     """Preprocess features for the dataset."""
-    if satellite == "K2":
+    if satellite == "K22":
         
         # Save target column separately
         target_col = "disposition"
@@ -87,6 +87,164 @@ def preprocess_features(df, satellite):
         X = df[numeric_cols + categorical_cols].copy()
 
         return X, target
+    
+    # elif satellite == "KOI":
+    #     df = df.copy()
+    #     SELECT_K = 40  
+    #     MIN_ONEHOT_FREQ = 10 
+    #     TEST_SIZE = 0.2
+    #     N_SPLITS = 5
+    #     RANDOM_STATE = 42
+
+    #     LABEL_SET = ["CANDIDATE", "CONFIRMED", "FALSE POSITIVE"]
+    #     df["disposition_norm"] = (
+    #         df["disposition"].astype(str).str.strip().str.upper().str.replace("_", " ")
+    #     )
+    #     df = df[df["disposition_norm"].isin(LABEL_SET)].copy()
+    #     df["y"] = df["disposition_norm"].map({lab: i for i, lab in enumerate(LABEL_SET)}).astype(int)
+
+    #     class_counts = df["disposition_norm"].value_counts().to_dict()
+    #     logger.info("Class distribution: %s", class_counts)
+
+    #     def add_k2_features(frame: pd.DataFrame) -> pd.DataFrame:
+    #         out = frame.copy()
+    #         if {"pl_rade","pl_radj"}.issubset(out.columns):
+    #             denom = (out["pl_radj"] * 11.209).replace(0, np.nan)
+    #             out["radius_consistency"] = out["pl_rade"] / denom
+    #         if {"pl_bmasse","pl_rade"}.issubset(out.columns):
+    #             denom = (out["pl_rade"]**3).replace(0, np.nan)
+    #             out["bulk_density_proxy"] = out["pl_bmasse"] / denom
+    #         if {"pl_orbper","pl_orbsmax"}.issubset(out.columns):
+    #             denom = (out["pl_orbsmax"]**3).replace(0, np.nan)
+    #             out["kepler_ratio"] = (out["pl_orbper"]**2) / denom
+    #         if {"pl_eqt","st_teff"}.issubset(out.columns):
+    #             denom = out["st_teff"].replace(0, np.nan)
+    #             out["temp_ratio"] = out["pl_eqt"] / denom
+    #         if "pl_insol" in out.columns:
+    #             out["log_insol"] = np.log10(out["pl_insol"].clip(lower=0) + 1)
+    #         if {"st_mass","st_rad"}.issubset(out.columns):
+    #             denom = (out["st_rad"]**3).replace(0, np.nan)
+    #             out["stellar_density_proxy"] = out["st_mass"] / denom
+    #         if "sy_dist" in out.columns:
+    #             out["log_distance"] = np.log10(out["sy_dist"].clip(lower=0) + 1)
+    #         if "pl_orbper" in out.columns:
+    #             out["log_period"] = np.log10(out["pl_orbper"].clip(lower=0) + 1)
+    #         return out.replace([np.inf, -np.inf], np.nan)
+
+    #     df = add_k2_features(df)
+    #     logger.info("Feature engineering complete. Current columns: %d", df.shape[1])
+
+    #     #%% [Block 5: Feature lists & grouping]
+    #     base_numeric = [
+    #         'sy_snum','sy_pnum','pl_orbper','pl_orbsmax','pl_rade','pl_radj','pl_bmasse','pl_bmassj',
+    #         'pl_orbeccen','pl_insol','pl_eqt','st_teff','st_rad','st_mass','st_met','st_logg',
+    #         'ra','dec','sy_dist','sy_vmag','sy_kmag','sy_gaiamag',
+    #         'radius_consistency','bulk_density_proxy','kepler_ratio','temp_ratio',
+    #         'log_insol','stellar_density_proxy','log_distance','log_period'
+    #     ]
+    #     context_num = [c for c in ["default_flag","pl_controv_flag","ttv_flag","disc_year"] if c in df.columns]
+    #     context_cat = [c for c in ["discoverymethod","disc_facility","st_spectype","pl_bmassprov"] if c in df.columns]
+
+    #     numeric_features = [c for c in base_numeric + context_num if c in df.columns]
+    #     categorical_features = [c for c in context_cat if c in df.columns]
+
+    #     if "hostname" in df.columns:
+    #         groups = df["hostname"].astype(str).values
+    #     else:
+    #         ra_bin = (df["ra"]*1000).round().astype("Int64") if "ra" in df.columns else 0
+    #         dec_bin = (df["dec"]*1000).round().astype("Int64") if "dec" in df.columns else 0
+    #         groups = (ra_bin.astype(str) + "_" + dec_bin.astype(str)).values
+
+    #     X_all = df[numeric_features + categorical_features].copy()
+    #     y_all = df["y"].values
+    #     logger.info("Numeric features: %d | Categorical: %d", len(numeric_features), len(categorical_features))
+
+    #     return X_all, y_all, target_encoder
+
+    elif satellite == "K2":
+        df = df.copy()
+
+        # Define canonical label order (kept for clarity)
+        LABEL_SET = ["CANDIDATE", "CONFIRMED", "FALSE POSITIVE"]
+
+        # Normalize label text
+        df["disposition_norm"] = (
+            df["disposition"]
+            .astype(str).str.strip().str.upper().str.replace("_", " ")
+        )
+        df = df[df["disposition_norm"].isin(LABEL_SET)].copy()
+
+        # === target encoder ===
+        target_encoder = LabelEncoder()
+        # Note: LabelEncoder sorts classes alphabetically; with these labels
+        # it becomes ['CANDIDATE','CONFIRMED','FALSE POSITIVE'] which matches LABEL_SET.
+        y = target_encoder.fit_transform(df["disposition_norm"])
+        df["target_encoder"] = y
+
+        class_counts = df["disposition_norm"].value_counts().to_dict()
+        logger.info("Class distribution: %s", class_counts)
+
+        # ---- feature engineering (unchanged) ----
+        def add_k2_features(frame: pd.DataFrame) -> pd.DataFrame:
+            out = frame.copy()
+            if {"pl_rade","pl_radj"}.issubset(out.columns):
+                denom = (out["pl_radj"] * 11.209).replace(0, np.nan)
+                out["radius_consistency"] = out["pl_rade"] / denom
+            if {"pl_bmasse","pl_rade"}.issubset(out.columns):
+                denom = (out["pl_rade"]**3).replace(0, np.nan)
+                out["bulk_density_proxy"] = out["pl_bmasse"] / denom
+            if {"pl_orbper","pl_orbsmax"}.issubset(out.columns):
+                denom = (out["pl_orbsmax"]**3).replace(0, np.nan)
+                out["kepler_ratio"] = (out["pl_orbper"]**2) / denom
+            if {"pl_eqt","st_teff"}.issubset(out.columns):
+                denom = out["st_teff"].replace(0, np.nan)
+                out["temp_ratio"] = out["pl_eqt"] / denom
+            if "pl_insol" in out.columns:
+                out["log_insol"] = np.log10(out["pl_insol"].clip(lower=0) + 1)
+            if {"st_mass","st_rad"}.issubset(out.columns):
+                denom = (out["st_rad"]**3).replace(0, np.nan)
+                out["stellar_density_proxy"] = out["st_mass"] / denom
+            if "sy_dist" in out.columns:
+                out["log_distance"] = np.log10(out["sy_dist"].clip(lower=0) + 1)
+            if "pl_orbper" in out.columns:
+                out["log_period"] = np.log10(out["pl_orbper"].clip(lower=0) + 1)
+            return out.replace([np.inf, -np.inf], np.nan)
+
+        df = add_k2_features(df)
+        logger.info("Feature engineering complete. Current columns: %d", df.shape[1])
+
+        # ---- feature lists & grouping (unchanged) ----
+        base_numeric = [
+            'sy_snum','sy_pnum','pl_orbper','pl_orbsmax','pl_rade','pl_radj','pl_bmasse','pl_bmassj',
+            'pl_orbeccen','pl_insol','pl_eqt','st_teff','st_rad','st_mass','st_met','st_logg',
+            'ra','dec','sy_dist','sy_vmag','sy_kmag','sy_gaiamag',
+            'radius_consistency','bulk_density_proxy','kepler_ratio','temp_ratio',
+            'log_insol','stellar_density_proxy','log_distance','log_period'
+        ]
+        context_num = [c for c in ["default_flag","pl_controv_flag","ttv_flag","disc_year"] if c in df.columns]
+        context_cat = [c for c in ["discoverymethod","disc_facility","st_spectype","pl_bmassprov"] if c in df.columns]
+
+        numeric_features = [c for c in base_numeric + context_num if c in df.columns]
+        categorical_features = [c for c in context_cat if c in df.columns]
+        X = df[numeric_features + categorical_features].copy()
+        logger.info("Numeric features: %d | Categorical: %d", len(numeric_features), len(categorical_features))
+        logger.info(f"Numeric features: {numeric_features}")
+        logger.info(f"Categorical features: {categorical_features}")
+        logger.info(f"Final feature matrix shape: {X.shape}")
+        logger.info(f"Target distribution: {np.bincount(y)}")
+
+        if "hostname" in df.columns:
+            groups = df["hostname"].astype(str).fillna("UNK").values
+        else:
+            ra_bin = (df["ra"]*1000).round().astype("Int64") if "ra" in df.columns else pd.Series(0, index=df.index, dtype="Int64")
+            dec_bin = (df["dec"]*1000).round().astype("Int64") if "dec" in df.columns else pd.Series(0, index=df.index, dtype="Int64")
+            groups = (ra_bin.astype(str) + "_" + dec_bin.astype(str)).values
+
+        # Final sanity check: all same length
+        assert len(X) == len(y) == len(groups), f"Length mismatch: X={len(X)}, y={len(y)}, groups={len(groups)}"
+
+        return X, y, groups, target_encoder, numeric_features, categorical_features
+
     
 
     elif satellite == "KOI":
