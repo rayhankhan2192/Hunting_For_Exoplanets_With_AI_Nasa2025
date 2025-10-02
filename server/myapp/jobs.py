@@ -12,7 +12,7 @@ LOG_DIR = (MEDIA_ROOT / "logs")
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 VALID_SATELLITES = {"K2", "TOI", "KOI"}
-VALID_MODELS = {"rf", "xgb", "dt", "grdb", "logreg", "svm"}
+VALID_MODELS = {"rf", "gb", "xgb", "dt", "grdb", "lr", "svm"}
 
 def _status_path(job_id: str) -> Path:
     return LOG_DIR / f"{job_id}.status.json"

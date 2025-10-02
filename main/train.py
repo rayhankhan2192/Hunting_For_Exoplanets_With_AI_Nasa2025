@@ -932,7 +932,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train exoplanet model")
     parser.add_argument("--data-path", type=str, required=True, help="Path to the dataset CSV file")
     parser.add_argument("--satellite", type=str, default="K2", help="Satellite name (K2, TOI, KOI)")
-    parser.add_argument("--model", type=str, choices=["rf", "xgb", "dt", "grdb", "logreg", "svm"], default="rf", help="Model type (rf, xgb, dt)")
+    parser.add_argument("--model", type=str, choices=["rf", "gb", "xgb", "dt", "grdb", "logreg", "svm"], default="rf", help="Model type (rf, xgb, dt)")
 
     args = parser.parse_args()
 
