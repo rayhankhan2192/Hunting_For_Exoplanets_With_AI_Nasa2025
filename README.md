@@ -11,7 +11,7 @@
 # How to use the AI
 ### 1. Hunt The Exoplanate
 
-1. Download the KOI, K2 train data from GitHub
+1. Download the KOI, K2 Test data from GitHub
 2. Go to SpectraAI [http://203.190.12.138:5174/](http://203.190.12.138:5174/)
 3. Click HUNT EXOPLANATE or Start Hunt
 4. Select the mision KOI, K2
