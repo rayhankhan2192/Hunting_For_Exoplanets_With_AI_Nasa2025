@@ -3,7 +3,7 @@
 [http://203.190.12.138:5174/](http://203.190.12.138:5174/)
 
 # Frontend Code
-[https://github.com/sabbir1054/nasa_ui](https://github.com/sabbir1054/nasa_ui)
+[https://github.com/rayhankhan2192/SpectrAI-WebApp](https://github.com/rayhankhan2192/SpectrAI-WebApp)
 
 ## 🔗 Live Demo  
 [![Live Demo](https://img.shields.io/badge/Try-SpectraAI-blue?style=for-the-badge&logo=vercel)](http://203.190.12.138:5174/)
