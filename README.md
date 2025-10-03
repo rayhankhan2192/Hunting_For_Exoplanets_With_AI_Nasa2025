@@ -8,6 +8,16 @@
 ## 🔗 Live Demo  
 [![Live Demo](https://img.shields.io/badge/Try-SpectraAI-blue?style=for-the-badge&logo=vercel)](http://203.190.12.138:5174/)
 
+# How to use the AI
+### Hunt The Exoplanate
+
+1. Download the KOI, K2 train data from GitHub
+2. Go to SpectraAI [http://203.190.12.138:5174/](http://203.190.12.138:5174/)
+3. Click HUNT EXOPLANATE or Start Hunt
+4. Select the mision KOI, K2
+5. Select Model for predicting, use XGB Boost for better accuracy
+6. Scroll down see the perforances and Click export for download the predicted CSV
+
 ## Features updated
 ```bash
 1. Launch new featrues for K2 satellite pipeline, robust Train, prediction with dynamic setup
