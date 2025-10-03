@@ -1,3 +1,12 @@
+## Try Frontend
+
+```bash
+http://203.190.12.138:5174/
+
+past in broswer
+````
+
+
 ## Features updated
 ```bash
 1. Launch new featrues for K2 satellite pipeline, robust Train, prediction with dynamic setup
