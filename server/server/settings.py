@@ -44,7 +44,7 @@ ALLOWED_HOSTS = [
     "203.190.12.138",
     "nspectra-ai.netlify.app"  # no leading dot needed
 ]
-CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_ORIGINS = True
 
 # Application definition
 
