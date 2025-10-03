@@ -32,13 +32,19 @@ DEBUG = True
 # CORS_ALLOW_ALL_ORIGINS = True
 
 CORS_ALLOWED_ORIGINS = [
-    "http://127.0.0.1:5500",
-    "http://localhost:5500",
-    "http://203.190.12.138:5173",
-    "https://nspectra-ai.netlify.app"
+    "http://127.0.0.1:5500",          # local testing
+    "http://localhost:5500",          # local testing
+    "http://203.190.12.138:5173",     # local frontend (Vite dev)
+    "https://nspectra-ai.netlify.app" # Netlify production
 ]
-ALLOWED_HOSTS = ["127.0.0.1", "localhost", "203.190.12.138", ".netlify.app"]
-CORS_ALLOW_ALL_ORIGINS = True
+
+ALLOWED_HOSTS = [
+    "127.0.0.1",
+    "localhost",
+    "203.190.12.138",
+    "nspectra-ai.netlify.app"  # no leading dot needed
+]
+CORS_ALLOW_ALL_ORIGINS = False
 
 # Application definition
 
