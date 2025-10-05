@@ -1,6 +1,6 @@
 ## 🚀 Try SpectraAI  
 
-[http://203.190.12.138:5174/](http://203.190.12.138:5174/)
+[http://34.133.59.171:5173/](http://34.133.59.171:5173/)
 
 # Frontend Code
 [https://github.com/rayhankhan2192/SpectraAI-WebApp](https://github.com/rayhankhan2192/SpectraAI-WebApp)
@@ -12,7 +12,7 @@
 ### 1. Hunt The Exoplanate
 
 1. Download the KOI, K2 Test data from GitHub
-2. Go to SpectraAI [http://203.190.12.138:5174/](http://203.190.12.138:5174/)
+2. Go to SpectraAI [http://34.133.59.171:5173/](http://34.133.59.171:5173/)
 3. Click HUNT EXOPLANATE or Start Hunt
 4. Select the mision KOI, K2
 5. Select Model for predicting, use XGB Boost for better accuracy
@@ -21,7 +21,7 @@
 ### 2. Update the model with Train + Predicted data
 
 1. Download the KOI Train CSV
-1. Goto DataFusion [http://203.190.12.138:5174/merge](http://203.190.12.138:5174/merge)
+1. Goto DataFusion [http://34.133.59.171:5173/merge](http://34.133.59.171:5173/merge)
 3. Select Train and your predicted file
 4. Click merge then use
 5. Train your new powerful model
