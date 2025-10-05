@@ -35,7 +35,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5500",
     "http://localhost:5500",
     "http://203.190.12.138:5173",
-    "http://34.133.59.171:5173/",
+    "http://34.133.59.171:5173",
 ]
 ALLOWED_HOSTS = ["127.0.0.1", "localhost", "203.190.12.138", "34.133.59.171"]
 CORS_ALLOW_ALL_ORIGINS = True
