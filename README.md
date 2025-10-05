@@ -6,7 +6,7 @@
 [https://github.com/rayhankhan2192/SpectraAI-WebApp](https://github.com/rayhankhan2192/SpectraAI-WebApp)
 
 ## 🔗 Live Demo  
-[![Live Demo](https://img.shields.io/badge/Try-SpectraAI-blue?style=for-the-badge&logo=vercel)](http://203.190.12.138:5174/)
+[![Live Demo](https://img.shields.io/badge/Try-SpectraAI-blue?style=for-the-badge&logo=vercel)](http://104.154.252.161:5173/)
 
 # How to use the AI
 ### 1. Hunt The Exoplanate
