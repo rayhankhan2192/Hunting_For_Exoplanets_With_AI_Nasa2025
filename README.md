@@ -16,7 +16,7 @@
 3. Click HUNT EXOPLANATE or Start Hunt
 4. Select the mision KOI, K2
 5. Select Model for predicting, use XGB Boost for better accuracy
-6. Scroll down see the perforances and Click export for download the predicted CSV
+6. Scroll down see the performances and Click export for download the predicted CSV
 
 ### 2. Update the model with Train + Predicted data
 
