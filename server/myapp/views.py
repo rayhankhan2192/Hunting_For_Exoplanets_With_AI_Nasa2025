@@ -1,4 +1,3 @@
-# api/views.py
 import json
 import os
 import time
@@ -26,13 +25,13 @@ TERMINAL = {"SUCCEEDED", "FAILED"}
 MEDIA_ROOT: Path = Path(settings.MEDIA_ROOT).resolve()
 UPLOAD_DIR: Path = (MEDIA_ROOT / "uploads").resolve()
 LOG_DIR: Path = (MEDIA_ROOT / "logs").resolve()
-MERGE_DIR: Path = (MEDIA_ROOT / "mergefiles").resolve()   # <-- save merged files here
+MERGE_DIR: Path = (MEDIA_ROOT / "mergefiles").resolve() 
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 MERGE_DIR.mkdir(parents=True, exist_ok=True)
 
-_SIGNER = signing.TimestampSigner(salt="koi-merge")  # used for merge gating tokens
+_SIGNER = signing.TimestampSigner(salt="koi-merge") 
 
 def _to_int_or_none(val) -> Optional[int]:
     s = (str(val).strip() if val is not None else "")
@@ -56,37 +55,33 @@ def _make_merge_token(rel_media_path: str) -> str:
     return _SIGNER.sign(payload)
 
 
-def _save_upload_to_media(file_obj, suggested_name: Optional[str] = None) -> str:
+def _save_upload_to_media(file, suggested_name: Optional[str] = None) -> str:
     """
     Save an uploaded file into MEDIA_ROOT/uploads and return the stored filename.
     """
-    if not file_obj:
+    if not file:
         raise ValueError("No file object provided")
 
-    name = suggested_name or getattr(file_obj, "name", None) or "upload.csv"
+    name = suggested_name or getattr(file, "name", None) or "upload.csv"
     stem = slugify(Path(name).stem) or "upload"
     filename = f"{stem}.csv"
 
-    # Avoid collisions
     out_path = (UPLOAD_DIR / filename)
     i = 1
     while out_path.exists():
         filename = f"{stem}-{i}.csv"
         out_path = (UPLOAD_DIR / filename)
         i += 1
-
-    # Guarantee .csv
     if not filename.lower().endswith(".csv"):
         filename += ".csv"
         out_path = (UPLOAD_DIR / filename)
 
     with open(out_path, "wb") as f:
-        # DRF InMemoryUploadedFile/TemporaryUploadedFile have .chunks()
-        chunks = file_obj.chunks() if hasattr(file_obj, "chunks") else [file_obj.read()]
+        chunks = file.chunks() if hasattr(file, "chunks") else [file.read()]
         for chunk in chunks:
             f.write(chunk)
 
-    return filename  # just the filename; full path is UPLOAD_DIR / filename
+    return filename 
 
 class StartTrainingView(APIView):
     """
@@ -111,14 +106,12 @@ class StartTrainingView(APIView):
                 },
                 status=status.HTTP_202_ACCEPTED,
             )
-
-        # Multipart upload path
         if request.FILES.get("file"):
             satellite = (request.POST.get("satellite") or "K2").strip()
             model_type = (request.POST.get("model") or "rf").strip()
-            file_obj = request.FILES["file"]
+            file = request.FILES["file"]
 
-            orig_name = os.path.basename(file_obj.name)
+            orig_name = os.path.basename(file.name)
             stem, ext = os.path.splitext(orig_name)
             if ext.lower() != ".csv":
                 return Response({"ok": False, "error": "Only .csv files allowed"}, status=400)
@@ -131,7 +124,7 @@ class StartTrainingView(APIView):
                 info = f"File exists. Using existing: {safe_name}"
             else:
                 with open(dest_path, "wb+") as dest:
-                    for chunk in file_obj.chunks():
+                    for chunk in file.chunks():
                         dest.write(chunk)
                 data_path = str(dest_path).replace("\\", "/")
                 info = f"Uploaded: {safe_name}"
@@ -140,22 +133,17 @@ class StartTrainingView(APIView):
                 job_info = create_training_job(data_path=data_path, satellite=satellite, model_type=model_type)
             except Exception as e:
                 return Response({"ok": False, "error": str(e)}, status=400)
-
             return _json_ok(job_info["job_id"], info=info)
-
-        # JSON path
         try:
             payload = json.loads(request.body.decode("utf-8"))
         except Exception:
             return HttpResponseBadRequest("Invalid JSON body")
-
         data_path = (payload.get("data_path") or "").strip()
         satellite = (payload.get("satellite") or "K2").strip()
         model_type = (payload.get("model") or "rf").strip()
 
         if not data_path:
             return HttpResponseBadRequest("Missing 'data_path' or 'file'")
-
         try:
             job_info = create_training_job(data_path=data_path, satellite=satellite, model_type=model_type)
         except Exception as e:
@@ -163,6 +151,121 @@ class StartTrainingView(APIView):
 
         return _json_ok(job_info["job_id"])
 
+from rest_framework.parsers import MultiPartParser, FormParser
+def _to_bool(val, default=False) -> bool:
+    if val is None:
+        return default
+    if isinstance(val, bool):
+        return val
+    s = str(val).strip().lower()
+    if s in {"1", "true", "yes", "y", "on"}:
+        return True
+    if s in {"0", "false", "no", "n", "off"}:
+        return False
+    return default
+from django.urls import reverse
+class TrainAllView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        file_obj = request.FILES.get("file")
+        if not file_obj:
+            return Response({"detail": "Provide a CSV file in 'file' field."}, status=400)
+        satellite = (request.data.get("satellite") or "KOI").strip().upper()
+        is_trainall = _to_bool(request.data.get("is_trainall"), default=False)
+        try:
+            stored_name = _save_upload_to_media(file_obj) 
+        except Exception as e:
+            return Response({"detail": f"Upload failed: {e}"}, status=400)
+
+        data_path = str((UPLOAD_DIR / stored_name).resolve())
+        file_url = _abs_media_url(request, f"uploads/{stored_name}")
+        try:
+            job_id = None
+            try:
+                job_info = create_training_job(
+                    data_path=data_path, 
+                    satellite=satellite, 
+                    model_type=None,
+                    is_trainall=is_trainall
+                )
+                job_id = job_info.get("job_id")  # <-- IMPORTANT
+                if not job_id:
+                    return Response({"detail": "Failed to create job."}, status=500)
+            except Exception as e:
+                return Response({"ok": False, "error": str(e)}, status=400)
+        except Exception as e:
+            return Response({"detail": f"Job creation failed: {e}"}, status=500)
+
+        poll_url = request.build_absolute_uri(f"{request.path}?job_id={job_id}")
+        logs_url = request.build_absolute_uri(f"{request.path}?job_id={job_id}&tail=800")
+
+        return Response(
+            {
+                "job_id": job_id,
+                "status": "QUEUED",
+                "poll_url": poll_url,
+                "logs_url": logs_url,
+                "file_url": file_url,
+                "satellite": satellite,
+                "is_trainall": is_trainall,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+    def get(self, request):
+        job_id = request.query_params.get("job_id")
+        if not job_id:
+            return Response({"detail": "job_id is required."}, status=400)
+
+        tail = _to_int_or_none(request.query_params.get("tail")) or 400
+        tail = max(50, min(tail, 5000))
+
+        job = get_job(job_id)
+        if not job:
+            return Response({"detail": "Job not found."}, status=404)
+
+        status_str = job.get("status", "UNKNOWN")
+        progress = job.get("progress", 0)
+        started_at = job.get("started_at")
+        updated_at = job.get("updated_at")
+        result = job.get("result")
+        try:
+            logs_tail = get_job_logs(job_id, tail=tail)
+        except TypeError:
+            try:
+                logs_tail = get_job_logs(job_id, tail)
+            except Exception:
+                logs_tail = ""
+        if result and isinstance(result, dict):
+            for key in ("cm_image_url", "cm_norm_image_url", "model_url"):
+                val = result.get(key)
+                if isinstance(val, str) and val.startswith("/media/"):
+                    result[key] = request.build_absolute_uri(val)
+
+            for path_key, url_key in [
+                ("cm_image_path", "cm_image_url"),
+                ("cm_norm_image_path", "cm_norm_image_url"),
+                ("model_path", "model_url"),
+            ]:
+                if result.get(url_key) is None and result.get(path_key):
+                    try:
+                        rel = str(Path(result[path_key]).resolve()).replace(str(MEDIA_ROOT), "").lstrip("\\/").replace("\\", "/")
+                        result[url_key] = _abs_media_url(request, rel)
+                    except Exception:
+                        pass
+        return Response(
+            {
+                "job_id": job_id,
+                "status": status_str,
+                "progress": progress,
+                "started_at": started_at,
+                "updated_at": updated_at,
+                "logs_tail": logs_tail,
+                "result": result if status_str in TERMINAL else None,
+            },
+            status=200,
+        )
 
 class TrainingStatusView(APIView):
     def get(self, request, job_id):
@@ -195,185 +298,6 @@ class TrainingLogsView(APIView):
         return Response({"ok": True, "job_id": job_id, "tail": tail, "logs": logs})
 
 
-# class PredictionView(APIView):
-#     """
-#     Predict on an uploaded CSV (multipart):
-#       - Required form fields: satellite (e.g., "KOI"), file (CSV)
-#       - Optional: from_csv_range, to_csv_range
-#     """
-
-#     def post(self, request, *args, **kwargs):
-#         try:
-#             satellite = (request.data.get("satellite") or "").upper().strip()
-#             if not satellite:
-#                 return Response(
-#                     {"ok": False, "error": "Missing satellite parameter"},
-#                     status=status.HTTP_400_BAD_REQUEST,
-#                 )
-
-#             file_obj = request.FILES.get("file")
-#             if not file_obj:
-#                 return Response(
-#                     {"ok": False, "error": "Missing CSV file"},
-#                     status=status.HTTP_400_BAD_REQUEST,
-#                 )
-
-#             orig_name = os.path.basename(file_obj.name)
-#             stem, ext = os.path.splitext(orig_name)
-#             if ext.lower() != ".csv":
-#                 return Response(
-#                     {"ok": False, "error": "Only .csv files are allowed."},
-#                     status=status.HTTP_400_BAD_REQUEST,
-#                 )
-
-#             safe_name = f"{slugify(stem)}{ext.lower() or '.csv'}"
-#             tmp_path = UPLOAD_DIR / safe_name
-#             with open(tmp_path, "wb+") as f:
-#                 for chunk in file_obj.chunks():
-#                     f.write(chunk)
-
-#             # Accept both 'from_csv_range' / 'to_csv_range' and the common typo key seen in your code
-#             from_raw = request.data.get("from_csv_range")
-#             if from_raw is None:
-#                 from_raw = request.data.get("from_csv_rabge")
-#             to_raw = request.data.get("to_csv_range")
-
-#             from_row = _to_int_or_none(from_raw)
-#             to_row = _to_int_or_none(to_raw)
-
-#             df_len = None
-#             if from_row is None and to_row is None:
-#                 row_numbers = None
-#             else:
-#                 if from_row is None:
-#                     from_row = 0
-#                 if to_row is None:
-#                     if df_len is None:
-#                         df_len = pd.read_csv(tmp_path, comment="#").shape[0]
-#                     to_row = df_len - 1
-
-#                 if df_len is None:
-#                     df_len = pd.read_csv(tmp_path, comment="#").shape[0]
-
-#                 from_row = max(0, from_row)
-#                 to_row = min(df_len - 1, to_row)
-
-#                 if from_row > to_row:
-#                     return Response(
-#                         {"ok": False, "error": "Invalid row range: from_row > to_row"},
-#                         status=status.HTTP_400_BAD_REQUEST,
-#                     )
-
-#                 row_numbers = list(range(from_row, to_row + 1))
-
-#             if satellite == "KOI":
-#                 results_df = koiprediction.predict_from_csv(str(tmp_path), row_numbers)
-#             else:
-#                 return Response(
-#                     {"ok": False, "error": f"Satellite {satellite} not supported yet"},
-#                     status=status.HTTP_400_BAD_REQUEST,
-#                 )
-
-#             if results_df is None or results_df.empty:
-#                 return Response(
-#                     {"ok": False, "error": "Prediction failed"},
-#                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#                 )
-
-#             df_raw = pd.read_csv(tmp_path, comment="#")
-
-#             # Determine prediction/prob columns to append
-#             pred_cols = []
-#             if "Predicted_Class" in results_df.columns:
-#                 pred_cols.append("Predicted_Class")
-#             for c in ["Confidence", "Match"]:
-#                 if c in results_df.columns and c not in pred_cols:
-#                     pred_cols.append(c)
-#             prob_cols = [c for c in results_df.columns if str(c).startswith("Prob_")]
-#             pred_cols.extend([c for c in prob_cols if c not in pred_cols])
-
-#             if not pred_cols:
-#                 first_col = results_df.columns[0]
-#                 pred_cols.append(first_col)
-#                 pred_cols.extend([c for c in results_df.columns if "prob" in str(c).lower() and c != first_col])
-
-#             # Prepare output columns (avoid collisions)
-#             for c in pred_cols:
-#                 out_col = c
-#                 if out_col in df_raw.columns:
-#                     i = 2
-#                     while f"{c}__pred{i}" in df_raw.columns:
-#                         i += 1
-#                     out_col = f"{c}__pred{i}"
-#                 df_raw[out_col] = pd.NA
-
-#             # Map from results col -> actual output col in df_raw
-#             out_name_map = {}
-#             for c in pred_cols:
-#                 if c in df_raw.columns:
-#                     out_name_map[c] = c
-#                 else:
-#                     found = None
-#                     for cc in df_raw.columns:
-#                         if cc == c or cc.startswith(f"{c}__pred"):
-#                             found = cc
-#                             break
-#                     out_name_map[c] = found or c
-
-#             # Insert values either for slice or all rows
-#             if row_numbers is None:
-#                 if len(results_df) != len(df_raw):
-#                     return Response(
-#                         {"ok": False, "error": "Prediction length mismatch with input rows"},
-#                         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#                     )
-#                 for c in pred_cols:
-#                     df_raw[out_name_map[c]] = results_df[c].values if c in results_df.columns else pd.NA
-#                 from_resp, to_resp = 0, len(df_raw) - 1
-#             else:
-#                 if len(results_df) != len(row_numbers):
-#                     return Response(
-#                         {"ok": False, "error": "Prediction length mismatch with requested row range"},
-#                         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#                     )
-#                 for c in pred_cols:
-#                     vals = results_df[c].values if c in results_df.columns else [pd.NA] * len(row_numbers)
-#                     df_raw.loc[row_numbers, out_name_map[c]] = list(vals)
-#                 from_resp, to_resp = row_numbers[0], row_numbers[-1]
-
-#             ts = time.strftime("%Y%m%d-%H%M%S")
-#             pred_name = f"{Path(safe_name).stem}__pred_{satellite}_{ts}.csv"
-#             output_file = (UPLOAD_DIR / pred_name)
-#             df_raw.to_csv(output_file, index=False)
-#             csv_url = f"{settings.MEDIA_URL}uploads/{pred_name}"
-
-#             if row_numbers is None:
-#                 total_rows = pd.read_csv(tmp_path, comment="#").shape[0]
-#                 from_row_resp, to_row_resp = 0, total_rows - 1
-#             else:
-#                 from_row_resp, to_row_resp = from_resp, to_resp
-
-#             # sanitize NaN/inf -> None for JSON
-#             results_safe = (
-#                 results_df.replace({np.nan: None, np.inf: None, -np.inf: None}).to_dict(orient="records")
-#             )
-
-#             return Response(
-#                 {
-#                     "ok": True,
-#                     "satellite": satellite,
-#                     "from_row": from_row_resp,
-#                     "to_row": to_row_resp,
-#                     "total_predicted": len(results_df),
-#                     "csv_file": request.build_absolute_uri(csv_url),
-#                     "results": results_safe,
-#                 },
-#                 status=status.HTTP_200_OK,
-#             )
-
-#         except Exception as e:
-#             return Response({"ok": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 from . import k2prediction
 class PredictionView(APIView):
     """
@@ -394,12 +318,12 @@ class PredictionView(APIView):
 
             model_type = (request.data.get("model_type") or "xgb").lower().strip()
 
-            file_obj = request.FILES.get("file")
-            if not file_obj:
+            file = request.FILES.get("file")
+            if not file:
                 return Response({"ok": False, "error": "Missing CSV file"},
                                 status=status.HTTP_400_BAD_REQUEST)
 
-            orig_name = os.path.basename(file_obj.name)
+            orig_name = os.path.basename(file.name)
             stem, ext = os.path.splitext(orig_name)
             if ext.lower() != ".csv":
                 return Response({"ok": False, "error": "Only .csv files are allowed."},
@@ -408,7 +332,7 @@ class PredictionView(APIView):
             safe_name = f"{slugify(stem)}{ext.lower() or '.csv'}"
             tmp_path = UPLOAD_DIR / safe_name
             with open(tmp_path, "wb+") as f:
-                for chunk in file_obj.chunks():
+                for chunk in file.chunks():
                     f.write(chunk)
 
             # range
@@ -536,7 +460,6 @@ class PredictionView(APIView):
         except FileNotFoundError as e:
             return Response({"ok": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            # optional: log.exception(...)
             return Response({"ok": False, "error": f"Unexpected error: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ListUploadsView(APIView):
@@ -647,7 +570,7 @@ class MergeCSVView(APIView):
             url = _abs_media_url(request, rel_media_path)
             token = _make_merge_token(rel_media_path)
 
-            # quick row count (header-aware; best-effort)
+
             try:
                 with open(p, "rb") as fh:
                     # count lines; subtract 1 for header if file has at least 1 line

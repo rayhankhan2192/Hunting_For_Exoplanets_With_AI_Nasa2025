@@ -33,6 +33,8 @@
 2. Updated KOI pipeline to load all artifacts dynaically
 
 3. Add new ML model, SVM, LogisticRegression, GradientBoostingClassifier
+
+4. 'mainV1.o.3' Create new trining pipeline, can train multiple model, system detect best one
 ```  
 
 

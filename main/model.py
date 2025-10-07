@@ -78,3 +78,16 @@ def get_model(model_type="rf"):
 
     else:
         raise ValueError(f"Unknown model_type: {model_type}")
+
+
+def train_all():
+    models = {
+        'XGBoost': get_model("xgb"),
+        'Random Forest': get_model("rf"),
+        'Gradeint Boosting': get_model("gb"),
+        'Logistic Regression': get_model('lr'),
+        'SVM': get_model("svm"),
+        'Decesion Tree': get_model("dt")
+    }
+
+    return models

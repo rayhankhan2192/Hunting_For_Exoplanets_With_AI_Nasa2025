@@ -438,14 +438,11 @@ def process_k22(data_path, model_type, satellite):
         accuracy_score, f1_score
     )
     from sklearn.utils.validation import has_fit_parameter
-    # ------------ config ------------
     SELECT_K = 40
     MIN_ONEHOT_FREQ = 10
     TEST_SIZE = 0.2
     N_SPLITS = 5
     RANDOM_STATE = 42
-
-    # ------------ load ------------
     logger.info("Processing K2 dataset...")
     df = load_data(data_path, "K2")
     if df is None:
@@ -700,7 +697,6 @@ def process_k22(data_path, model_type, satellite):
     }
 
 
-
 def process_koi(data_path, model_type, satellite):
     """
     Train/eval on KOI and return:
@@ -749,7 +745,6 @@ def process_koi(data_path, model_type, satellite):
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled  = scaler.transform(X_test)
-
     logger.info("   Data split completed:")
     logger.info(f"   Training set: {X_train.shape[0]} samples")
     logger.info(f"   Test set: {X_test.shape[0]} samples")
@@ -791,7 +786,6 @@ def process_koi(data_path, model_type, satellite):
     logger.info(f"Test Accuracy: {accuracy:.4f}")
     logger.info(f"Cross-validation Accuracy: {cv_mean:.4f} ± {cv_std:.4f}")
     logger.info(f"ROC-AUC Score: {auc_score:.4f}")
-
     logger.info("\n=== VALIDATION REPORT ===")
     try:
         logger.info("\n" + classification_report(
@@ -810,7 +804,7 @@ def process_koi(data_path, model_type, satellite):
     except Exception:
         logger.info(f"\n{pd.DataFrame(cm)}")
 
-    # === Normalized CM (row-wise) ===
+    # Normalized CM (row-wise)
     with np.errstate(all="ignore"):
         cm_normalized = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
     cm_normalized = np.nan_to_num(cm_normalized)  # replace NaN for rows with 0 samples
@@ -839,7 +833,7 @@ def process_koi(data_path, model_type, satellite):
     cm_img_path = PLOTS_DIR / f"cm_{satellite}_{model_type}_{timestamp}.png"
     cm_norm_img_path = PLOTS_DIR / f"cm_{satellite}_{model_type}_{timestamp}_normalized.png"
 
-    # --- Raw CM Plot ---
+    #Raw CM Plot
     plt.figure(figsize=(6, 5), dpi=160)
     plt.imshow(cm, interpolation="nearest")
     plt.title(f"Confusion Matrix – {satellite}/{model_type}")
@@ -858,7 +852,7 @@ def process_koi(data_path, model_type, satellite):
     plt.savefig(cm_img_path, bbox_inches="tight")
     plt.close()
 
-    # --- Normalized CM Plot ---
+    # Normalized CM Plot
     plt.figure(figsize=(6.5, 6.2), dpi=180)
     ax = plt.gca()
     im = ax.imshow(cm_normalized, vmin=0.0, vmax=1.0, interpolation="nearest")
@@ -915,11 +909,9 @@ def process_koi(data_path, model_type, satellite):
 
 
 
-
 def main(data_path, satellite="K2", model_type="rf"):
     """Main function to load data, preprocess, train model, and evaluate."""
     if satellite == "K2":
-        #process_k2(data_path, model_type, satellite)
         return process_k22(data_path, model_type, satellite)
     elif satellite == "KOI":
         return process_koi(data_path, model_type, satellite)
